@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>ItauInvestmentBroker.Infrastructure</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+        <PackageReference Include="Confluent.Kafka" Version="2.8.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\ItauInvestmentBroker.Domain\ItauInvestmentBroker.Domain.csproj" />
+        <ProjectReference Include="..\ItauInvestmentBroker.Application\ItauInvestmentBroker.Application.csproj" />
+    </ItemGroup>
+
+</Project>
