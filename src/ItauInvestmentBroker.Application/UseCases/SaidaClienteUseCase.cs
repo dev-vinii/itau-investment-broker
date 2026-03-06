@@ -17,6 +17,8 @@ public class SaidaClienteUseCase(IClienteRepository clienteRepository, IUnitOfWo
                 $"Cliente com ID {clienteId} já está inativo.",
                 ErrorCodes.ClienteJaInativo);
 
+        // RN-007: Saida muda status do cliente para inativo.
+        // RN-008: Nao ha venda automatica de custodia no processo de saida.
         cliente.Ativo = false;
         await unitOfWork.CommitAsync(cancellationToken);
     }

@@ -35,6 +35,7 @@ public class CotacaoService : ICotacaoService
             var cotacoes = _parser.ParseArquivo(arquivo);
             foreach (var cotacao in cotacoes.Where(c => c.CodigoBDI is "02" or "96"))
             {
+                // RN-027: manter a cotacao de fechamento mais recente disponivel no COTAHIST.
                 _cotacoes[cotacao.Ticker] = cotacao;
             }
         }

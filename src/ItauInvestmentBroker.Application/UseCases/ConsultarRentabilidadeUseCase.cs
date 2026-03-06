@@ -18,6 +18,7 @@ public class ConsultarRentabilidadeUseCase(
                 $"Cliente com ID {clienteId} não encontrado.",
                 ErrorCodes.ClienteNaoEncontrado);
 
+        // RN-010: Cliente pode consultar carteira mesmo apos sair (nao valida Ativo=true aqui).
         var contaGrafica = await contaGraficaRepository.FindByClienteId(clienteId, cancellationToken)
             ?? throw new NotFoundException(
                 $"Conta gráfica não encontrada para o cliente {clienteId}.",
@@ -46,16 +47,20 @@ public class ConsultarRentabilidadeUseCase(
 
             ativos.Add(new AtivoRentabilidadeResponse(
                 Ticker: custodia.Ticker,
+                // RN-068: Exibir quantidade por ativo.
                 Quantidade: custodia.Quantidade,
+                // RN-067: Exibir preco medio por ativo.
                 PrecoMedio: Math.Round(custodia.PrecoMedio, 2),
+                // RN-069: Exibir cotacao atual por ativo.
                 CotacaoAtual: cotacaoAtual,
                 ValorAtual: Math.Round(valorAtual, 2),
+                // RN-064: Exibir P/L por ativo.
                 Pl: Math.Round(pl, 2),
                 ComposicaoPercentual: 0
             ));
         }
 
-        // Calcular composição percentual
+        // RN-070: Composicao percentual real da carteira por ativo.
         var ativosComPercentual = ativos.Select(a => a with
         {
             ComposicaoPercentual = valorAtualTotal > 0
@@ -63,7 +68,9 @@ public class ConsultarRentabilidadeUseCase(
                 : 0
         }).ToList();
 
+        // RN-065: P/L total da carteira.
         var plTotal = valorAtualTotal - valorInvestidoTotal;
+        // RN-066: Rentabilidade percentual da carteira.
         var rentabilidade = valorInvestidoTotal > 0
             ? Math.Round((valorAtualTotal - valorInvestidoTotal) / valorInvestidoTotal * 100, 2)
             : 0;
@@ -71,6 +78,7 @@ public class ConsultarRentabilidadeUseCase(
         return new RentabilidadeResponse(
             ClienteId: cliente.Id,
             Nome: cliente.Nome,
+            // RN-063: Saldo total/valor investido e valor atual total da carteira.
             ValorInvestidoTotal: Math.Round(valorInvestidoTotal, 2),
             ValorAtualTotal: Math.Round(valorAtualTotal, 2),
             PlTotal: Math.Round(plTotal, 2),

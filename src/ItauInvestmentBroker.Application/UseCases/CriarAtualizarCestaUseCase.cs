@@ -14,11 +14,13 @@ public class CriarAtualizarCestaUseCase(
 {
     public async Task<CestaResponse> Executar(CestaRequest request, CancellationToken cancellationToken = default)
     {
+        // RN-014/RN-015: Cesta deve ter 5 ativos e somar 100%.
         await validator.ValidateAndThrowAsync(request, cancellationToken);
 
         var cestaAntiga = await cestaRepository.FindAtiva(cancellationToken);
         if (cestaAntiga is not null)
         {
+            // RN-017/RN-018: Desativa cesta anterior para manter somente uma cesta ativa.
             cestaAntiga.Ativa = false;
             cestaAntiga.DataDesativacao = DateTime.UtcNow;
         }

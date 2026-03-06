@@ -25,10 +25,11 @@ public class ExecutarCompraUseCase(
 
     public async Task<ExecutarCompraResponse> Executar(CancellationToken cancellationToken = default)
     {
-        // 1. Carregar cesta ativa + clientes ativos + conta master
+        // RN-026: Execucao da compra usa a cesta ativa para consolidacao.
         var cesta = await cestaRepository.FindAtiva(cancellationToken)
             ?? throw new NotFoundException("Nenhuma cesta ativa encontrada.", ErrorCodes.CestaNaoEncontrada);
 
+        // RN-024: Apenas clientes ativos participam da compra programada.
         var clientes = (await clienteRepository.FindAtivos(cancellationToken)).ToList();
         if (clientes.Count == 0)
             throw new BusinessException("Nenhum cliente ativo encontrado.", ErrorCodes.ClienteNaoEncontrado);
@@ -37,7 +38,7 @@ public class ExecutarCompraUseCase(
         var contaMaster = contasMaster.FirstOrDefault()
             ?? throw new NotFoundException("Conta master não encontrada.", ErrorCodes.ClienteNaoEncontrado);
 
-        // 2. Calcular valor total a investir (1/3 do valor mensal de cada cliente)
+        // RN-023/RN-025/RN-026: Aporte do ciclo = valor mensal / 3, consolidado para compra unica.
         var valorTotalInvestimento = clientes.Sum(c => c.ValorMensal / DivisorMensal);
 
         // 3. Para cada ticker: buscar cotação, saldo master, calcular quantidade
@@ -50,10 +51,11 @@ public class ExecutarCompraUseCase(
                     $"Cotação não encontrada para o ticker {itemCesta.Ticker}.",
                     ErrorCodes.CotacaoNaoEncontrada);
 
+            // RN-028: Quantidade calculada com truncamento (inteiro para baixo).
             var valorParaTicker = valorTotalInvestimento * (itemCesta.Percentual / 100m);
             var quantidadeNecessaria = (int)(valorParaTicker / cotacao.PrecoFechamento);
 
-            // RN-029/030: Descontar saldo da custódia master
+            // RN-029/RN-030/RN-040: Considerar saldo master e descontar da nova compra.
             var custodiaMaster = await custodiaRepository.FindByContaGraficaIdAndTicker(
                 contaMaster.Id, itemCesta.Ticker, cancellationToken);
             var saldoMaster = custodiaMaster?.Quantidade ?? 0;
@@ -66,7 +68,7 @@ public class ExecutarCompraUseCase(
             if (quantidadeTotalDisponivel == 0)
                 continue;
 
-            // RN-031/032: Separar lote padrão vs fracionário
+            // RN-031/RN-032: Separar mercado de lote e fracionario.
             var quantidadeLote = (quantidadeAComprar / LotePadrao) * LotePadrao;
             var quantidadeFracionario = quantidadeAComprar - quantidadeLote;
 
@@ -111,6 +113,7 @@ public class ExecutarCompraUseCase(
             {
                 ordem.Itens.Add(new ItemOrdemCompra
                 {
+                    // RN-033: Ticker do fracionario usa sufixo "F".
                     Ticker = item.Ticker + "F",
                     Quantidade = item.QuantidadeFracionario,
                     PrecoUnitario = item.PrecoUnitario,
@@ -122,8 +125,8 @@ public class ExecutarCompraUseCase(
 
         ordemCompraRepository.Add(ordem);
 
-        // 5. Zerar custódia master dos tickers (será recalculada com resíduos)
-        foreach (var item in itensCompra)
+            // RN-039: Residuos permanecem na master apos redistribuicao.
+            foreach (var item in itensCompra)
         {
             if (item.SaldoMasterAnterior > 0)
             {
@@ -134,7 +137,7 @@ public class ExecutarCompraUseCase(
             }
         }
 
-        // 6. Distribuir proporcionalmente para contas filhotes
+        // RN-034: Distribuicao para filhotes e proporcional ao aporte do cliente.
         var distribuicao = new Distribuicao
         {
             OrdemCompraId = ordem.Id,
@@ -166,7 +169,7 @@ public class ExecutarCompraUseCase(
                     ContaGraficaId = cliente.ContaGrafica!.Id
                 });
 
-                // 7. Atualizar custódia filhote + preço médio
+                // RN-038/RN-041/RN-044: Atualizar custodia e recalcular preco medio em compras.
                 await AtualizarCustodia(
                     cliente.ContaGrafica.Id,
                     item.Ticker,
@@ -174,7 +177,7 @@ public class ExecutarCompraUseCase(
                     item.PrecoUnitario,
                     cancellationToken);
 
-                // RN-054/056: IR dedo-duro por cliente por ticker
+                // RN-053/RN-054/RN-056: Calcular IR dedo-duro por operacao distribuida.
                 var valorOperacao = quantidadeCliente * item.PrecoUnitario;
                 var valorIr = Math.Round(valorOperacao * AliquotaIrDedoDuro, 2);
 
@@ -193,7 +196,7 @@ public class ExecutarCompraUseCase(
                 ));
             }
 
-            // 8. Resíduo fica na conta master (RN-039)
+            // RN-039: Residuo nao distribuido permanece em custodia master.
             var residuo = item.QuantidadeTotalDisponivel - quantidadeDistribuida;
             if (residuo > 0)
             {
@@ -215,10 +218,10 @@ public class ExecutarCompraUseCase(
 
         distribuicaoRepository.Add(distribuicao);
 
-        // 9. Commit da transação
+        // RN-055: Publicacao Kafka deve ocorrer apos persistencia da operacao.
         await unitOfWork.CommitAsync(cancellationToken);
 
-        // 10. Publicar IR dedo-duro no Kafka (após commit)
+        // RN-055: Publicar eventos de IR dedo-duro no Kafka.
         foreach (var evento in eventosIr)
         {
             await kafkaProducer.ProduceAsync(
@@ -267,7 +270,7 @@ public class ExecutarCompraUseCase(
         }
         else
         {
-            // RN-042: PM = (Qtd Anterior × PM Anterior + Qtd Nova × Preço Nova) / (Qtd Anterior + Qtd Nova)
+            // RN-042: PM = (Qtd Anterior x PM Anterior + Qtd Nova x Preco Novo) / (Qtd Anterior + Qtd Nova)
             custodia.PrecoMedio =
                 (custodia.Quantidade * custodia.PrecoMedio + quantidadeNova * precoCompra)
                 / (custodia.Quantidade + quantidadeNova);
