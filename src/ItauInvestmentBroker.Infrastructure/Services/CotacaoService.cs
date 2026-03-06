@@ -1,5 +1,5 @@
-using ItauInvestmentBroker.Application.Interfaces;
-using ItauInvestmentBroker.Application.Models;
+using ItauInvestmentBroker.Application.Common.Interfaces;
+using ItauInvestmentBroker.Application.Common.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 

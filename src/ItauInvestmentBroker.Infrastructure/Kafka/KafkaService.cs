@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Confluent.Kafka;
-using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 

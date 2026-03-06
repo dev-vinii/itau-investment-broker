@@ -1,4 +1,4 @@
-using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 
 namespace ItauInvestmentBroker.Infrastructure.Services;
 

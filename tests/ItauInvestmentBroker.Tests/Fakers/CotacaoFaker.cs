@@ -1,5 +1,5 @@
 using Bogus;
-using ItauInvestmentBroker.Application.Models;
+using ItauInvestmentBroker.Application.Common.Models;
 
 namespace ItauInvestmentBroker.Tests.Fakers;
 

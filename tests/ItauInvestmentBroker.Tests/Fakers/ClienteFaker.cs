@@ -1,7 +1,10 @@
 using Bogus;
 using Bogus.Extensions.Brazil;
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Enums;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Enums;
+using ItauInvestmentBroker.Domain.Motor.Enums;
 
 namespace ItauInvestmentBroker.Tests.Fakers;
 

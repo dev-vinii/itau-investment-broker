@@ -1,6 +1,7 @@
 using FluentValidation.TestHelper;
-using ItauInvestmentBroker.Application.DTOs.Cliente;
-using ItauInvestmentBroker.Application.Validators;
+using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
+using ItauInvestmentBroker.Application.Features.Clientes.Validators;
+using ItauInvestmentBroker.Application.Features.Cestas.Validators;
 
 namespace ItauInvestmentBroker.Tests.Validators;
 

@@ -1,8 +1,16 @@
 using FluentAssertions;
-using ItauInvestmentBroker.Application.Exceptions;
-using ItauInvestmentBroker.Application.UseCases;
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Repositories;
+using ItauInvestmentBroker.Application.Common.Exceptions;
+using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
+using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
+using ItauInvestmentBroker.Application.Features.Motor.UseCases;
+using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Cestas.Repositories;
+using ItauInvestmentBroker.Domain.Clientes.Repositories;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
 using NSubstitute;
 

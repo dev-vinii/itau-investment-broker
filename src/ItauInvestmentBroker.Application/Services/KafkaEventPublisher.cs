@@ -1,6 +1,6 @@
-using ItauInvestmentBroker.Application.Configuration;
-using ItauInvestmentBroker.Application.DTOs.Motor;
-using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Features.Motor.DTOs;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

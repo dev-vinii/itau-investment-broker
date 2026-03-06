@@ -1,8 +1,13 @@
-using ItauInvestmentBroker.Application.Configuration;
-using ItauInvestmentBroker.Application.DTOs.Motor;
-using ItauInvestmentBroker.Application.Interfaces;
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Repositories;
+using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Features.Motor.DTOs;
+using ItauInvestmentBroker.Application.Common.Interfaces;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Cestas.Repositories;
+using ItauInvestmentBroker.Domain.Clientes.Repositories;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Repositories;
 using Microsoft.Extensions.Options;
 
 namespace ItauInvestmentBroker.Application.Services;

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
-using ItauInvestmentBroker.Application.Exceptions;
+using ItauInvestmentBroker.Application.Common.Exceptions;
 
 namespace ItauInvestmentBroker.API.Middlewares;
 

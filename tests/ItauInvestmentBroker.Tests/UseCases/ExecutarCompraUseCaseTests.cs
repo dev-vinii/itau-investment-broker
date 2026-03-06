@@ -1,12 +1,21 @@
 using FluentAssertions;
-using ItauInvestmentBroker.Application.Configuration;
-using ItauInvestmentBroker.Application.Exceptions;
-using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Exceptions;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Services;
-using ItauInvestmentBroker.Application.UseCases;
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Enums;
-using ItauInvestmentBroker.Domain.Repositories;
+using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
+using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
+using ItauInvestmentBroker.Application.Features.Motor.UseCases;
+using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Enums;
+using ItauInvestmentBroker.Domain.Motor.Enums;
+using ItauInvestmentBroker.Domain.Cestas.Repositories;
+using ItauInvestmentBroker.Domain.Clientes.Repositories;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -115,7 +124,7 @@ public class ExecutarCompraUseCaseTests
         SetupClientes();
         SetupContaMaster();
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 30m));
-        _cotacaoService.ObterCotacao("VALE3").Returns(default(Application.Models.Cotacao));
+        _cotacaoService.ObterCotacao("VALE3").Returns(default(ItauInvestmentBroker.Application.Common.Models.Cotacao));
 
         // PETR4 works but VALE3 will fail - however order depends on Itens iteration
         // Since PETR4 has cotacao, it won't fail on PETR4. VALE3 has null cotacao.

@@ -1,4 +1,6 @@
-using ItauInvestmentBroker.Domain.Entities;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

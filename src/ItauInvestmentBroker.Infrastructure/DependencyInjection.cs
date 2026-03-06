@@ -1,5 +1,8 @@
-using ItauInvestmentBroker.Application.Interfaces;
-using ItauInvestmentBroker.Domain.Repositories;
+using ItauInvestmentBroker.Application.Common.Interfaces;
+using ItauInvestmentBroker.Domain.Cestas.Repositories;
+using ItauInvestmentBroker.Domain.Clientes.Repositories;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Infrastructure.Database;
 using ItauInvestmentBroker.Infrastructure.Kafka;
 using ItauInvestmentBroker.Infrastructure.Repositories;

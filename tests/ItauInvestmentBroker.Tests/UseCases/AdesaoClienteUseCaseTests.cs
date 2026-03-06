@@ -1,13 +1,22 @@
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using ItauInvestmentBroker.Application.DTOs.Cliente;
-using ItauInvestmentBroker.Application.Exceptions;
-using ItauInvestmentBroker.Application.Interfaces;
-using ItauInvestmentBroker.Application.UseCases;
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Enums;
-using ItauInvestmentBroker.Domain.Repositories;
+using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
+using ItauInvestmentBroker.Application.Common.Exceptions;
+using ItauInvestmentBroker.Application.Common.Interfaces;
+using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
+using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
+using ItauInvestmentBroker.Application.Features.Motor.UseCases;
+using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Enums;
+using ItauInvestmentBroker.Domain.Motor.Enums;
+using ItauInvestmentBroker.Domain.Cestas.Repositories;
+using ItauInvestmentBroker.Domain.Clientes.Repositories;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
 using NSubstitute;
 
@@ -97,7 +106,7 @@ public class AdesaoClienteUseCaseTests
     public async Task Deve_Lancar_Quando_Validacao_Falha()
     {
         var request = new AdesaoRequest("", "123", "invalido", 10m);
-        var realValidator = new Application.Validators.AdesaoRequestValidator();
+        var realValidator = new ItauInvestmentBroker.Application.Features.Clientes.Validators.AdesaoRequestValidator();
         var dateTimeProvider = Substitute.For<IDateTimeProvider>();
         dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
         var useCase = new AdesaoClienteUseCase(_clienteRepository, _cestaRepository, _unitOfWork, realValidator, dateTimeProvider);

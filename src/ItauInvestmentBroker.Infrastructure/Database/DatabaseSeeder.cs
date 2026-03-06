@@ -1,5 +1,8 @@
-using ItauInvestmentBroker.Domain.Entities;
-using ItauInvestmentBroker.Domain.Enums;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Motor.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Enums;
+using ItauInvestmentBroker.Domain.Motor.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

@@ -1,7 +1,7 @@
 using Bogus;
 using Bogus.Extensions.Brazil;
-using ItauInvestmentBroker.Application.DTOs.Cesta;
-using ItauInvestmentBroker.Application.DTOs.Cliente;
+using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
+using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 
 namespace ItauInvestmentBroker.Tests.Fakers;
 

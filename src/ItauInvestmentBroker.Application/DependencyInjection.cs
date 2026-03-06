@@ -1,6 +1,6 @@
 using FluentValidation;
-using ItauInvestmentBroker.Application.Configuration;
-using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Services;
 using Mapster;
 using MapsterMapper;

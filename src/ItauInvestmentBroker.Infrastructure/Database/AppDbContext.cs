@@ -1,4 +1,7 @@
-using ItauInvestmentBroker.Domain.Entities;
+using ItauInvestmentBroker.Domain.Cestas.Entities;
+using ItauInvestmentBroker.Domain.Clientes.Entities;
+using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ItauInvestmentBroker.Infrastructure.Database;

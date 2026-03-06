@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text;
-using ItauInvestmentBroker.Application.Models;
+using ItauInvestmentBroker.Application.Common.Models;
 
 namespace ItauInvestmentBroker.Infrastructure.Services;
 
