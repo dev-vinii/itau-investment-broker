@@ -10,7 +10,7 @@ Legenda de status:
 | RN-001 | Implementada | `AdesaoRequestValidator.cs:10-27` |
 | RN-002 | Implementada | `AdesaoClienteUseCase.cs:21-26`, `ClienteConfiguration.cs:23` |
 | RN-003 | Implementada | `AdesaoRequestValidator.cs:24-27`, `ValorMensalRequestValidator.cs:10-13` |
-| RN-004 | Parcial | Conta filhote em `AdesaoClienteUseCase.cs:28-34`; custodia criada sob demanda em `ExecutarCompraUseCase.cs:259-270` |
+| RN-004 | Implementada | Conta filhote + custodia filhote criadas na adesao em `AdesaoClienteUseCase.cs` |
 | RN-005 | Implementada | `Cliente.cs:9`, `AdesaoClienteUseCase.cs:36` |
 | RN-006 | Implementada | `Cliente.cs:10`, `AdesaoClienteUseCase.cs:36` |
 | RN-007 | Implementada | `SaidaClienteUseCase.cs:20-23` |
@@ -26,9 +26,9 @@ Legenda de status:
 | RN-017 | Implementada | `CriarAtualizarCestaUseCase.cs:23-26` |
 | RN-018 | Implementada | Fluxo em `CriarAtualizarCestaUseCase.cs:20-26` + unique filtered index em `CestaConfiguration.cs` |
 | RN-019 | Implementada | `CriarAtualizarCestaUseCase.cs:33-37` |
-| RN-020 | Nao Implementada | Nao existe agendamento automatico 5/15/25 |
-| RN-021 | Nao Implementada | Nao existe regra automatica para fim de semana |
-| RN-022 | Nao Implementada | Nao existe calendario util automatico |
+| RN-020 | Implementada | Agendamento externo no `docker-compose.yml` (`scheduler`) + regra 5/15/25 em `docker/scheduler/run-motor.sh` |
+| RN-021 | Implementada | Ajuste para proximo dia util (segunda) em `docker/scheduler/run-motor.sh` |
+| RN-022 | Implementada | Execucao apenas segunda a sexta via `docker/scheduler/crontab` |
 | RN-023 | Implementada | `ExecutarCompraUseCase.cs:21`, `ExecutarCompraUseCase.cs:41-42` |
 | RN-024 | Implementada | `ExecutarCompraUseCase.cs:32-35`, `RebalancearPorDesvioUseCase.cs:30-33` |
 | RN-025 | Implementada | `ExecutarCompraUseCase.cs:41-42` |
@@ -79,8 +79,8 @@ Legenda de status:
 | RN-070 | Implementada | `ConsultarRentabilidadeUseCase.cs:63-68` |
 
 ## Resumo
-- Implementadas: 66
-- Parciais: 1 (`RN-004`)
-- Nao implementadas: 3 (`RN-020`, `RN-021`, `RN-022`)
+- Implementadas: 70
+- Parciais: 0
+- Nao implementadas: 0
 
-Observacao: as regras `RN-020` a `RN-022` dependem de agendamento/calendario automatico, que ainda nao existe no projeto.
+Observacao: todas as regras RN-001 a RN-070 estao mapeadas como implementadas.

@@ -10,6 +10,7 @@ namespace ItauInvestmentBroker.Application.UseCases;
 
 public class AdesaoClienteUseCase(
     IClienteRepository clienteRepository,
+    ICestaRepository cestaRepository,
     IUnitOfWork unitOfWork,
     IValidator<AdesaoRequest> validator)
 {
@@ -25,16 +26,32 @@ public class AdesaoClienteUseCase(
                 $"Já existe um cliente cadastrado com o CPF {request.Cpf}.",
                 ErrorCodes.ClienteCpfDuplicado);
 
-        // RN-004: Adesao cria automaticamente a Conta Grafica Filhote.
+        // RN-004: Adesao cria automaticamente a Conta Grafica Filhote e sua Custodia Filhote.
         var cliente = request.Adapt<Cliente>();
-        cliente.ContaGrafica = new ContaGrafica
+        var contaFilhote = new ContaGrafica
         {
             NumeroConta = Guid.NewGuid().ToString("N")[..10].ToUpper(),
             Tipo = TipoConta.FILHOTE
         };
+        cliente.ContaGrafica = contaFilhote;
+
+        // Materializa a custodia filhote na adesao com os ativos da cesta ativa (posicoes zeradas).
+        var cestaAtiva = await cestaRepository.FindAtiva(cancellationToken);
+        if (cestaAtiva is not null)
+        {
+            foreach (var item in cestaAtiva.Itens)
+            {
+                contaFilhote.Custodias.Add(new Custodia
+                {
+                    Ticker = item.Ticker,
+                    Quantidade = 0,
+                    PrecoMedio = 0,
+                    DataUltimaAtualizacao = DateTime.UtcNow
+                });
+            }
+        }
 
         // RN-005/RN-006: Cliente nasce ativo e com data de adesao (defaults da entidade).
-        // RN-004 (parcial): custodia filhote e criada sob demanda na primeira distribuicao/compra.
         clienteRepository.Add(cliente);
         await unitOfWork.CommitAsync(cancellationToken);
 

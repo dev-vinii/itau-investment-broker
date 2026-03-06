@@ -18,10 +18,13 @@ public class CestaConfiguration : IEntityTypeConfiguration<Cesta>
         builder.Property(c => c.DataCriacao);
         builder.Property(c => c.DataDesativacao);
 
-        // RN-018: Unique filtered index garante no maximo uma cesta ativa no banco.
-        builder.HasIndex(c => c.Ativa)
-            .IsUnique()
-            .HasFilter("Ativa = 1");
+        // RN-018: MySQL-safe - permite varias inativas (NULL) e no maximo uma ativa (1).
+        builder.Property<int?>("AtivaUnica")
+            .HasColumnName("ativa_unica")
+            .HasComputedColumnSql("CASE WHEN `Ativa` = 1 THEN 1 ELSE NULL END", stored: true);
+
+        builder.HasIndex("AtivaUnica")
+            .IsUnique();
 
         builder.HasMany(c => c.Itens)
             .WithOne(i => i.Cesta)
