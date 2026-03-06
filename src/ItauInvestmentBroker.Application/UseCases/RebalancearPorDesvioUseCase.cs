@@ -10,6 +10,7 @@ public class RebalancearPorDesvioUseCase(
     ICestaRepository cestaRepository,
     IClienteRepository clienteRepository,
     ICustodiaRepository custodiaRepository,
+    IVendaRebalanceamentoRepository vendaRebalanceamentoRepository,
     ICotacaoService cotacaoService,
     IKafkaProducer kafkaProducer,
     IUnitOfWork unitOfWork)
@@ -23,9 +24,11 @@ public class RebalancearPorDesvioUseCase(
 
     public async Task<RebalancearPorDesvioResponse> Executar(CancellationToken cancellationToken = default)
     {
+        // RN-050: Rebalanceamento por desvio usa composicao da cesta ativa.
         var cesta = await cestaRepository.FindAtiva(cancellationToken)
             ?? throw new NotFoundException("Nenhuma cesta ativa encontrada.", ErrorCodes.CestaNaoEncontrada);
 
+        // RN-024: Apenas clientes ativos participam do rebalanceamento.
         var clientes = (await clienteRepository.FindAtivos(cancellationToken)).ToList();
         if (clientes.Count == 0)
             throw new BusinessException("Nenhum cliente ativo encontrado.", ErrorCodes.ClienteNaoEncontrado);
@@ -58,7 +61,7 @@ public class RebalancearPorDesvioUseCase(
             if (valorTotalCarteira == 0)
                 continue;
 
-            // RN-051: Verificar desvios
+            // RN-051: Verificar desvio por ativo com limiar configurado (5 p.p.).
             var desvios = new List<DesvioInfo>();
 
             foreach (var custodia in custodias)
@@ -93,7 +96,7 @@ public class RebalancearPorDesvioUseCase(
             var vendasCliente = new List<VendaInfo>();
             decimal valorDisponivel = 0;
 
-            // RN-052: Vender ativos sobre-alocados
+            // RN-052: Vender ativos sobre-alocados e recomprar sub-alocados.
             foreach (var desvio in desvios.Where(d => d.Desvio > 0))
             {
                 var valorAlvo = valorTotalCarteira * (desvio.PercentualAlvo / 100m);
@@ -157,37 +160,63 @@ public class RebalancearPorDesvioUseCase(
                 }
             }
 
-            // IR sobre vendas
+            // RN-057: Persistir vendas para acumular total mensal.
+            foreach (var venda in vendasCliente)
+            {
+                vendaRebalanceamentoRepository.Add(new VendaRebalanceamento
+                {
+                    ClienteId = cliente.Id,
+                    Ticker = venda.Ticker,
+                    Quantidade = venda.Quantidade,
+                    PrecoVenda = venda.PrecoVenda,
+                    PrecoMedio = venda.PrecoMedio,
+                    ValorVenda = venda.ValorVenda,
+                    Lucro = venda.Lucro
+                });
+            }
+
+            // RN-057 a RN-062: IR sobre vendas com acumulado mensal.
             if (vendasCliente.Count > 0)
             {
-                var totalVendas = vendasCliente.Sum(v => v.ValorVenda);
-                var lucroLiquido = vendasCliente.Sum(v => v.Lucro);
+                var agora = DateTime.UtcNow;
+                var vendasAnterioresMes = await vendaRebalanceamentoRepository
+                    .SomarVendasMes(cliente.Id, agora.Year, agora.Month, cancellationToken);
+                var lucroAnteriorMes = await vendaRebalanceamentoRepository
+                    .SomarLucroMes(cliente.Id, agora.Year, agora.Month, cancellationToken);
+
+                var totalVendasExecucao = vendasCliente.Sum(v => v.ValorVenda);
+                var lucroExecucao = vendasCliente.Sum(v => v.Lucro);
+
+                var totalVendasMes = vendasAnterioresMes + totalVendasExecucao;
+                var lucroLiquidoMes = lucroAnteriorMes + lucroExecucao;
+
                 decimal valorIr = 0;
                 decimal aliquota = 0;
 
-                if (totalVendas > LimiteIsencaoVendas && lucroLiquido > 0)
+                if (totalVendasMes > LimiteIsencaoVendas && lucroLiquidoMes > 0)
                 {
                     aliquota = AliquotaIrVenda;
-                    valorIr = Math.Round(lucroLiquido * AliquotaIrVenda, 2);
+                    valorIr = Math.Round(lucroLiquidoMes * AliquotaIrVenda, 2);
                 }
 
                 eventosIrVenda.Add(new IrVendaEvent(
                     Tipo: "IR_VENDA",
                     ClienteId: cliente.Id,
                     Cpf: cliente.Cpf,
-                    MesReferencia: DateTime.UtcNow.ToString("yyyy-MM"),
-                    TotalVendasMes: Math.Round(totalVendas, 2),
-                    LucroLiquido: Math.Round(lucroLiquido, 2),
+                    MesReferencia: agora.ToString("yyyy-MM"),
+                    TotalVendasMes: Math.Round(totalVendasMes, 2),
+                    LucroLiquido: Math.Round(lucroLiquidoMes, 2),
                     Aliquota: aliquota,
                     ValorIR: valorIr,
                     Detalhes: vendasCliente.Select(v => new IrVendaDetalheEvent(
                         v.Ticker, v.Quantidade, v.PrecoVenda, Math.Round(v.PrecoMedio, 2), Math.Round(v.Lucro, 2)
                     )).ToList(),
-                    DataCalculo: DateTime.UtcNow
+                    DataCalculo: agora
                 ));
             }
         }
 
+        // RN-055/RN-062: Persistir antes da publicacao de eventos de IR no Kafka.
         await unitOfWork.CommitAsync(cancellationToken);
 
         foreach (var evento in eventosIrDedoDuro)

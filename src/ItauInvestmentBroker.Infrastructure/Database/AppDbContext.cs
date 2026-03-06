@@ -18,6 +18,8 @@ public class AppDbContext : DbContext
     public DbSet<ItemOrdemCompra> ItensOrdemCompra => Set<ItemOrdemCompra>();
     public DbSet<Distribuicao> Distribuicoes => Set<Distribuicao>();
     public DbSet<ItemDistribuicao> ItensDistribuicao => Set<ItemDistribuicao>();
+    public DbSet<HistoricoValorMensal> HistoricoValorMensal => Set<HistoricoValorMensal>();
+    public DbSet<VendaRebalanceamento> VendasRebalanceamento => Set<VendaRebalanceamento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
