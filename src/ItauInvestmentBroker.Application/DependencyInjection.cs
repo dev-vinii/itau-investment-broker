@@ -1,16 +1,22 @@
 using FluentValidation;
+using ItauInvestmentBroker.Application.Configuration;
 using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Services;
 using Mapster;
 using MapsterMapper;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ItauInvestmentBroker.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
         var assembly = typeof(DependencyInjection).Assembly;
+
+        // Configuration
+        services.Configure<MotorSettings>(configuration.GetSection(MotorSettings.SectionName));
 
         // Mapster
         var config = TypeAdapterConfig.GlobalSettings;
@@ -20,6 +26,11 @@ public static class DependencyInjection
 
         // FluentValidation
         services.AddValidatorsFromAssembly(assembly);
+
+        // Application Services
+        services.AddScoped<CustodiaAppService>();
+        services.AddScoped<IrCalculationService>();
+        services.AddScoped<KafkaEventPublisher>();
 
         // Use Cases (auto-scan)
         var useCaseTypes = assembly.GetTypes()

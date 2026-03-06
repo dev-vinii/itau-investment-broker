@@ -1,9 +1,12 @@
+using ItauInvestmentBroker.Application.Configuration;
 using ItauInvestmentBroker.Application.DTOs.Motor;
 using ItauInvestmentBroker.Application.Exceptions;
 using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Services;
 using ItauInvestmentBroker.Domain.Entities;
 using ItauInvestmentBroker.Domain.Enums;
 using ItauInvestmentBroker.Domain.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace ItauInvestmentBroker.Application.UseCases;
 
@@ -15,13 +18,14 @@ public class ExecutarCompraUseCase(
     IOrdemCompraRepository ordemCompraRepository,
     IDistribuicaoRepository distribuicaoRepository,
     ICotacaoService cotacaoService,
-    IKafkaProducer kafkaProducer,
-    IUnitOfWork unitOfWork)
+    CustodiaAppService custodiaAppService,
+    IrCalculationService irCalculationService,
+    KafkaEventPublisher kafkaEventPublisher,
+    IDateTimeProvider dateTimeProvider,
+    IUnitOfWork unitOfWork,
+    IOptions<MotorSettings> motorSettings)
 {
-    private const decimal DivisorMensal = 3m;
-    private const int LotePadrao = 100;
-    private const decimal AliquotaIrDedoDuro = 0.00005m;
-    private const string TopicoIrDedoDuro = "ir-dedo-duro";
+    private readonly MotorSettings _settings = motorSettings.Value;
 
     public async Task<ExecutarCompraResponse> Executar(CancellationToken cancellationToken = default)
     {
@@ -36,19 +40,59 @@ public class ExecutarCompraUseCase(
 
         var contasMaster = (await contaGraficaRepository.FindMaster(cancellationToken)).ToList();
         var contaMaster = contasMaster.FirstOrDefault()
-            ?? throw new NotFoundException("Conta master não encontrada.", ErrorCodes.ClienteNaoEncontrado);
+            ?? throw new NotFoundException("Conta master nao encontrada.", ErrorCodes.ClienteNaoEncontrado);
 
-        // RN-023/RN-025/RN-026: Aporte do ciclo = valor mensal / 3, consolidado para compra unica.
-        var valorTotalInvestimento = clientes.Sum(c => c.ValorMensal / DivisorMensal);
+        // RN-023/RN-025/RN-026: Aporte do ciclo = valor mensal / divisor, consolidado para compra unica.
+        var valorTotalInvestimento = clientes.Sum(c => c.ValorMensal / _settings.DivisorMensal);
 
-        // 3. Para cada ticker: buscar cotação, saldo master, calcular quantidade
+        var itensCompra = await CalcularItensCompra(cesta, contaMaster, valorTotalInvestimento, cancellationToken);
+
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var dataExecucao = dateTimeProvider.UtcNow;
+            var ordem = CriarOrdemCompra(itensCompra, contaMaster.Id, cesta.Id, dataExecucao);
+            ordemCompraRepository.Add(ordem);
+
+            // RN-039: Zerar saldo master consumido.
+            await ZerarSaldoMasterConsumido(itensCompra, contaMaster.Id, cancellationToken);
+
+            // RN-034: Distribuicao para filhotes proporcional ao aporte.
+            var (distribuicao, eventosIr) = await DistribuirParaClientes(
+                ordem, itensCompra, clientes, contaMaster, valorTotalInvestimento, cancellationToken);
+            distribuicaoRepository.Add(distribuicao);
+
+            await unitOfWork.CommitTransactionAsync(cancellationToken);
+
+            // RN-055: Publicar eventos de IR apos persistencia.
+            await kafkaEventPublisher.PublicarEventosIr(eventosIr, []);
+
+            return new ExecutarCompraResponse(
+                ordem.Id, ordem.DataExecucao, ordem.ValorTotal, clientes.Count,
+                itensCompra.Select(i => new ItemCompraResponse(
+                    i.Ticker, i.QuantidadeLote, i.QuantidadeFracionario,
+                    i.QuantidadeAComprar, i.PrecoUnitario,
+                    i.QuantidadeAComprar * i.PrecoUnitario
+                )).ToList());
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<List<ItemCompraInfo>> CalcularItensCompra(
+        Cesta cesta, ContaGrafica contaMaster, decimal valorTotalInvestimento,
+        CancellationToken cancellationToken)
+    {
         var itensCompra = new List<ItemCompraInfo>();
 
         foreach (var itemCesta in cesta.Itens)
         {
             var cotacao = cotacaoService.ObterCotacao(itemCesta.Ticker)
                 ?? throw new BusinessException(
-                    $"Cotação não encontrada para o ticker {itemCesta.Ticker}.",
+                    $"Cotacao nao encontrada para o ticker {itemCesta.Ticker}.",
                     ErrorCodes.CotacaoNaoEncontrada);
 
             // RN-028: Quantidade calculada com truncamento (inteiro para baixo).
@@ -61,15 +105,13 @@ public class ExecutarCompraUseCase(
             var saldoMaster = custodiaMaster?.Quantidade ?? 0;
 
             var quantidadeAComprar = Math.Max(0, quantidadeNecessaria - saldoMaster);
-
-            // RN-037: Total disponível = compradas + saldo master
             var quantidadeTotalDisponivel = quantidadeAComprar + saldoMaster;
 
             if (quantidadeTotalDisponivel == 0)
                 continue;
 
             // RN-031/RN-032: Separar mercado de lote e fracionario.
-            var quantidadeLote = (quantidadeAComprar / LotePadrao) * LotePadrao;
+            var quantidadeLote = (quantidadeAComprar / _settings.LotePadrao) * _settings.LotePadrao;
             var quantidadeFracionario = quantidadeAComprar - quantidadeLote;
 
             itensCompra.Add(new ItemCompraInfo
@@ -85,14 +127,19 @@ public class ExecutarCompraUseCase(
             });
         }
 
-        // 4. Criar OrdemCompra na conta master
+        return itensCompra;
+    }
+
+    private OrdemCompra CriarOrdemCompra(
+        List<ItemCompraInfo> itensCompra, long contaMasterId, long cestaId, DateTime dataExecucao)
+    {
         var ordem = new OrdemCompra
         {
-            DataExecucao = DateTime.UtcNow,
+            DataExecucao = dataExecucao,
             Status = StatusOrdemCompra.EXECUTADA,
             ValorTotal = itensCompra.Sum(i => i.QuantidadeAComprar * i.PrecoUnitario),
-            ContaGraficaId = contaMaster.Id,
-            CestaId = cesta.Id
+            ContaGraficaId = contaMasterId,
+            CestaId = cestaId
         };
 
         foreach (var item in itensCompra)
@@ -123,21 +170,28 @@ public class ExecutarCompraUseCase(
             }
         }
 
-        ordemCompraRepository.Add(ordem);
+        return ordem;
+    }
 
-            // RN-039: Residuos permanecem na master apos redistribuicao.
-            foreach (var item in itensCompra)
+    private async Task ZerarSaldoMasterConsumido(
+        List<ItemCompraInfo> itensCompra, long contaMasterId, CancellationToken cancellationToken)
+    {
+        foreach (var item in itensCompra)
         {
             if (item.SaldoMasterAnterior > 0)
             {
                 var custodiaMaster = await custodiaRepository.FindByContaGraficaIdAndTicker(
-                    contaMaster.Id, item.Ticker, cancellationToken);
+                    contaMasterId, item.Ticker, cancellationToken);
                 if (custodiaMaster is not null)
                     custodiaMaster.Quantidade = 0;
             }
         }
+    }
 
-        // RN-034: Distribuicao para filhotes e proporcional ao aporte do cliente.
+    private async Task<(Distribuicao, List<IrDedoDuroEvent>)> DistribuirParaClientes(
+        OrdemCompra ordem, List<ItemCompraInfo> itensCompra, List<Cliente> clientes,
+        ContaGrafica contaMaster, decimal valorTotalInvestimento, CancellationToken cancellationToken)
+    {
         var distribuicao = new Distribuicao
         {
             OrdemCompraId = ordem.Id,
@@ -152,9 +206,9 @@ public class ExecutarCompraUseCase(
 
             foreach (var cliente in clientes)
             {
-                // RN-035: Proporção = aporte do cliente / total de aportes
-                var proporcao = (cliente.ValorMensal / DivisorMensal) / valorTotalInvestimento;
-                // RN-036: Quantidade = TRUNCAR(proporção × total disponível)
+                // RN-035: Proporcao = aporte do cliente / total de aportes
+                var proporcao = (cliente.ValorMensal / _settings.DivisorMensal) / valorTotalInvestimento;
+                // RN-036: Quantidade = TRUNCAR(proporcao x total disponivel)
                 var quantidadeCliente = (int)(item.QuantidadeTotalDisponivel * proporcao);
 
                 if (quantidadeCliente == 0)
@@ -169,31 +223,15 @@ public class ExecutarCompraUseCase(
                     ContaGraficaId = cliente.ContaGrafica!.Id
                 });
 
-                // RN-038/RN-041/RN-044: Atualizar custodia e recalcular preco medio em compras.
-                await AtualizarCustodia(
-                    cliente.ContaGrafica.Id,
-                    item.Ticker,
-                    quantidadeCliente,
-                    item.PrecoUnitario,
-                    cancellationToken);
+                // RN-038/RN-041/RN-044: Atualizar custodia e recalcular preco medio.
+                await custodiaAppService.AtualizarCustodia(
+                    cliente.ContaGrafica.Id, item.Ticker, quantidadeCliente,
+                    item.PrecoUnitario, cancellationToken);
 
                 // RN-053/RN-054/RN-056: Calcular IR dedo-duro por operacao distribuida.
-                var valorOperacao = quantidadeCliente * item.PrecoUnitario;
-                var valorIr = Math.Round(valorOperacao * AliquotaIrDedoDuro, 2);
-
-                eventosIr.Add(new IrDedoDuroEvent(
-                    Tipo: "IR_DEDO_DURO",
-                    ClienteId: cliente.Id,
-                    Cpf: cliente.Cpf,
-                    Ticker: item.Ticker,
-                    TipoOperacao: "COMPRA",
-                    Quantidade: quantidadeCliente,
-                    PrecoUnitario: item.PrecoUnitario,
-                    ValorOperacao: valorOperacao,
-                    Aliquota: AliquotaIrDedoDuro,
-                    ValorIR: valorIr,
-                    DataOperacao: ordem.DataExecucao
-                ));
+                eventosIr.Add(irCalculationService.CalcularIrDedoDuro(
+                    cliente.Id, cliente.Cpf, item.Ticker, "COMPRA",
+                    quantidadeCliente, item.PrecoUnitario, ordem.DataExecucao));
             }
 
             // RN-039: Residuo nao distribuido permanece em custodia master.
@@ -207,76 +245,13 @@ public class ExecutarCompraUseCase(
                     ContaGraficaId = contaMaster.Id
                 });
 
-                await AtualizarCustodia(
-                    contaMaster.Id,
-                    item.Ticker,
-                    residuo,
-                    item.PrecoUnitario,
-                    cancellationToken);
+                await custodiaAppService.AtualizarCustodia(
+                    contaMaster.Id, item.Ticker, residuo,
+                    item.PrecoUnitario, cancellationToken);
             }
         }
 
-        distribuicaoRepository.Add(distribuicao);
-
-        // RN-055: Publicacao Kafka deve ocorrer apos persistencia da operacao.
-        await unitOfWork.CommitAsync(cancellationToken);
-
-        // RN-055: Publicar eventos de IR dedo-duro no Kafka.
-        foreach (var evento in eventosIr)
-        {
-            await kafkaProducer.ProduceAsync(
-                TopicoIrDedoDuro,
-                $"{evento.ClienteId}-{evento.Ticker}",
-                evento);
-        }
-
-        return new ExecutarCompraResponse(
-            ordem.Id,
-            ordem.DataExecucao,
-            ordem.ValorTotal,
-            clientes.Count,
-            itensCompra.Select(i => new ItemCompraResponse(
-                i.Ticker,
-                i.QuantidadeLote,
-                i.QuantidadeFracionario,
-                i.QuantidadeAComprar,
-                i.PrecoUnitario,
-                i.QuantidadeAComprar * i.PrecoUnitario
-            )).ToList()
-        );
-    }
-
-    private async Task AtualizarCustodia(
-        long contaGraficaId,
-        string ticker,
-        int quantidadeNova,
-        decimal precoCompra,
-        CancellationToken cancellationToken)
-    {
-        var custodia = await custodiaRepository.FindByContaGraficaIdAndTicker(
-            contaGraficaId, ticker, cancellationToken);
-
-        if (custodia is null)
-        {
-            custodia = new Custodia
-            {
-                Ticker = ticker,
-                Quantidade = quantidadeNova,
-                PrecoMedio = precoCompra,
-                ContaGraficaId = contaGraficaId,
-                DataUltimaAtualizacao = DateTime.UtcNow
-            };
-            custodiaRepository.Add(custodia);
-        }
-        else
-        {
-            // RN-042: PM = (Qtd Anterior x PM Anterior + Qtd Nova x Preco Novo) / (Qtd Anterior + Qtd Nova)
-            custodia.PrecoMedio =
-                (custodia.Quantidade * custodia.PrecoMedio + quantidadeNova * precoCompra)
-                / (custodia.Quantidade + quantidadeNova);
-            custodia.Quantidade += quantidadeNova;
-            custodia.DataUltimaAtualizacao = DateTime.UtcNow;
-        }
+        return (distribuicao, eventosIr);
     }
 
     private class ItemCompraInfo

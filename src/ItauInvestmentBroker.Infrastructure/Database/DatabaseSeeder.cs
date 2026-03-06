@@ -8,6 +8,9 @@ namespace ItauInvestmentBroker.Infrastructure.Database;
 
 public static class DatabaseSeeder
 {
+    private const string MasterCpf = "00000000000";
+    private const string MasterNumeroConta = "MST-000001";
+
     public static async Task SeedAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
         using var scope = serviceProvider.CreateScope();
@@ -16,38 +19,36 @@ public static class DatabaseSeeder
 
         await context.Database.MigrateAsync(cancellationToken);
 
-        var masterExists = await context.ContasGraficas.AnyAsync(c => c.Tipo == TipoConta.MASTER, cancellationToken);
+        var masterExists = await context.ContasGraficas
+            .AnyAsync(c => c.Tipo == TipoConta.MASTER, cancellationToken);
         if (masterExists)
             return;
 
-        var cpfBase = 90000000000L;
-        string cpf;
-        do
+        try
         {
-            cpf = cpfBase.ToString();
-            cpfBase++;
-        } while (await context.Clientes.AnyAsync(c => c.Cpf == cpf, cancellationToken));
+            var clienteTecnico = new Cliente
+            {
+                Nome = "Conta Master Corretora",
+                Cpf = MasterCpf,
+                Email = "conta.master@itaubroker.local",
+                ValorMensal = 0,
+                Ativo = false,
+                DataAdesao = DateTime.UtcNow
+            };
 
-        var clienteTecnico = new Cliente
+            clienteTecnico.ContaGrafica = new ContaGrafica
+            {
+                NumeroConta = MasterNumeroConta,
+                Tipo = TipoConta.MASTER
+            };
+
+            context.Clientes.Add(clienteTecnico);
+            await context.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Conta master criada automaticamente na inicializacao.");
+        }
+        catch (DbUpdateException ex)
         {
-            Nome = "Conta Master Corretora",
-            Cpf = cpf,
-            Email = "conta.master@itaubroker.local",
-            ValorMensal = 0,
-            Ativo = false,
-            DataAdesao = DateTime.UtcNow
-        };
-
-        clienteTecnico.ContaGrafica = new ContaGrafica
-        {
-            // Seed idempotente para garantir funcionamento do motor de compra.
-            NumeroConta = "MST-000001",
-            Tipo = TipoConta.MASTER
-        };
-
-        context.Clientes.Add(clienteTecnico);
-
-        await context.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Conta master criada automaticamente na inicializacao.");
+            logger.LogWarning(ex, "Conta master ja existe (criada por outra instancia). Ignorando.");
+        }
     }
 }

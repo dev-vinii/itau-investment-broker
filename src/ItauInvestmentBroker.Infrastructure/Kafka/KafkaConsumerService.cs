@@ -39,12 +39,12 @@ public class KafkaConsumerService : BackgroundService
     {
         if (_topics.Length == 0)
         {
-            _logger.LogWarning("Nenhum handler de Kafka registrado. Consumer não será iniciado.");
+            _logger.LogWarning("Nenhum handler de Kafka registrado. Consumer nao sera iniciado.");
             return;
         }
 
         _consumer.Subscribe(_topics);
-        _logger.LogInformation("Kafka consumer inscrito nos tópicos: {Topics}", string.Join(", ", _topics));
+        _logger.LogInformation("Kafka consumer inscrito nos topicos: {Topics}", string.Join(", ", _topics));
 
         await Task.Run(() => ConsumeLoopAsync(stoppingToken), stoppingToken);
     }
@@ -58,7 +58,7 @@ public class KafkaConsumerService : BackgroundService
                 var result = _consumer.Consume(stoppingToken);
 
                 _logger.LogInformation(
-                    "Mensagem recebida do tópico {Topic} com chave {Key}",
+                    "Mensagem recebida do topico {Topic} com chave {Key}",
                     result.Topic, result.Message.Key);
 
                 using var scope = _scopeFactory.CreateScope();
@@ -67,7 +67,7 @@ public class KafkaConsumerService : BackgroundService
 
                 if (handler is null)
                 {
-                    _logger.LogWarning("Nenhum handler encontrado para o tópico {Topic}", result.Topic);
+                    _logger.LogWarning("Nenhum handler encontrado para o topico {Topic}", result.Topic);
                     continue;
                 }
 
@@ -76,6 +76,10 @@ public class KafkaConsumerService : BackgroundService
             catch (ConsumeException ex)
             {
                 _logger.LogError(ex, "Erro ao consumir mensagem do Kafka");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Erro inesperado ao processar mensagem do Kafka");
             }
         }
     }

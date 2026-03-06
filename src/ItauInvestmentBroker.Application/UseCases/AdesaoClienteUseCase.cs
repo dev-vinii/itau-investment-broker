@@ -1,6 +1,7 @@
 using FluentValidation;
 using ItauInvestmentBroker.Application.DTOs.Cliente;
 using ItauInvestmentBroker.Application.Exceptions;
+using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Domain.Entities;
 using ItauInvestmentBroker.Domain.Enums;
 using ItauInvestmentBroker.Domain.Repositories;
@@ -12,7 +13,8 @@ public class AdesaoClienteUseCase(
     IClienteRepository clienteRepository,
     ICestaRepository cestaRepository,
     IUnitOfWork unitOfWork,
-    IValidator<AdesaoRequest> validator)
+    IValidator<AdesaoRequest> validator,
+    IDateTimeProvider dateTimeProvider)
 {
     public async Task<AdesaoResponse> Executar(AdesaoRequest request, CancellationToken cancellationToken = default)
     {
@@ -23,7 +25,7 @@ public class AdesaoClienteUseCase(
         var clienteExistente = await clienteRepository.FindByCpf(request.Cpf, cancellationToken);
         if (clienteExistente is not null)
             throw new BusinessException(
-                $"Já existe um cliente cadastrado com o CPF {request.Cpf}.",
+                $"Ja existe um cliente cadastrado com o CPF {request.Cpf}.",
                 ErrorCodes.ClienteCpfDuplicado);
 
         // RN-004: Adesao cria automaticamente a Conta Grafica Filhote e sua Custodia Filhote.
@@ -46,7 +48,7 @@ public class AdesaoClienteUseCase(
                     Ticker = item.Ticker,
                     Quantidade = 0,
                     PrecoMedio = 0,
-                    DataUltimaAtualizacao = DateTime.UtcNow
+                    DataUltimaAtualizacao = dateTimeProvider.UtcNow
                 });
             }
         }

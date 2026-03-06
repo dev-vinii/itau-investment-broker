@@ -3,6 +3,7 @@ using FluentValidation;
 using FluentValidation.Results;
 using ItauInvestmentBroker.Application.DTOs.Cliente;
 using ItauInvestmentBroker.Application.Exceptions;
+using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Application.UseCases;
 using ItauInvestmentBroker.Domain.Entities;
 using ItauInvestmentBroker.Domain.Enums;
@@ -18,13 +19,16 @@ public class AdesaoClienteUseCaseTests
     private readonly ICestaRepository _cestaRepository = Substitute.For<ICestaRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IValidator<AdesaoRequest> _validator = Substitute.For<IValidator<AdesaoRequest>>();
+    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
     private readonly AdesaoClienteUseCase _useCase;
 
     public AdesaoClienteUseCaseTests()
     {
+        _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
+        _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<IDisposable>());
         _validator.ValidateAsync(Arg.Any<ValidationContext<AdesaoRequest>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
-        _useCase = new AdesaoClienteUseCase(_clienteRepository, _cestaRepository, _unitOfWork, _validator);
+        _useCase = new AdesaoClienteUseCase(_clienteRepository, _cestaRepository, _unitOfWork, _validator, _dateTimeProvider);
     }
 
     [Fact]
@@ -94,7 +98,9 @@ public class AdesaoClienteUseCaseTests
     {
         var request = new AdesaoRequest("", "123", "invalido", 10m);
         var realValidator = new Application.Validators.AdesaoRequestValidator();
-        var useCase = new AdesaoClienteUseCase(_clienteRepository, _cestaRepository, _unitOfWork, realValidator);
+        var dateTimeProvider = Substitute.For<IDateTimeProvider>();
+        dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
+        var useCase = new AdesaoClienteUseCase(_clienteRepository, _cestaRepository, _unitOfWork, realValidator, dateTimeProvider);
 
         var act = () => useCase.Executar(request);
 

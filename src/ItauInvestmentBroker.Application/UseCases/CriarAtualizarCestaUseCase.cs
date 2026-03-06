@@ -1,5 +1,6 @@
 using FluentValidation;
 using ItauInvestmentBroker.Application.DTOs.Cesta;
+using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Domain.Entities;
 using ItauInvestmentBroker.Domain.Repositories;
 using Mapster;
@@ -10,6 +11,7 @@ public class CriarAtualizarCestaUseCase(
     ICestaRepository cestaRepository,
     IUnitOfWork unitOfWork,
     IValidator<CestaRequest> validator,
+    IDateTimeProvider dateTimeProvider,
     RebalancearCarteiraUseCase rebalancearCarteira)
 {
     public async Task<CestaResponse> Executar(CestaRequest request, CancellationToken cancellationToken = default)
@@ -22,7 +24,7 @@ public class CriarAtualizarCestaUseCase(
         {
             // RN-017/RN-018: Desativa cesta anterior para manter somente uma cesta ativa.
             cestaAntiga.Ativa = false;
-            cestaAntiga.DataDesativacao = DateTime.UtcNow;
+            cestaAntiga.DataDesativacao = dateTimeProvider.UtcNow;
         }
 
         var novaCesta = request.Adapt<Cesta>();

@@ -16,9 +16,9 @@ public class CestaRequestValidator : AbstractValidator<CestaRequest>
             .Must(i => i.Count == 5)
             .WithMessage(x => $"A cesta deve conter exatamente 5 ativos. Quantidade informada: {x.Itens.Count}.");
 
-        // RN-015: Soma dos percentuais deve ser 100%.
+        // RN-015: Soma dos percentuais deve ser 100% (tolerancia para precisao decimal).
         RuleFor(x => x.Itens)
-            .Must(i => i.Sum(item => item.Percentual) == 100)
+            .Must(i => Math.Abs(i.Sum(item => item.Percentual) - 100m) < 0.01m)
             .WithMessage(x => $"A soma dos percentuais deve ser exatamente 100%. Soma atual: {x.Itens.Sum(i => i.Percentual)}%.");
 
         // RN-016: Cada percentual deve ser maior que 0%.

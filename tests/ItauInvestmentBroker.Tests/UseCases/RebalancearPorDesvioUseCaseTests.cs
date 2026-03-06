@@ -1,10 +1,14 @@
 using FluentAssertions;
+using ItauInvestmentBroker.Application.Configuration;
 using ItauInvestmentBroker.Application.Exceptions;
 using ItauInvestmentBroker.Application.Interfaces;
+using ItauInvestmentBroker.Application.Services;
 using ItauInvestmentBroker.Application.UseCases;
 using ItauInvestmentBroker.Domain.Entities;
 using ItauInvestmentBroker.Domain.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 
 namespace ItauInvestmentBroker.Tests.UseCases;
@@ -18,13 +22,24 @@ public class RebalancearPorDesvioUseCaseTests
     private readonly ICotacaoService _cotacaoService = Substitute.For<ICotacaoService>();
     private readonly IKafkaProducer _kafkaProducer = Substitute.For<IKafkaProducer>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
+    private readonly IOptions<MotorSettings> _motorSettingsOptions = Options.Create(new MotorSettings());
+    private readonly CustodiaAppService _custodiaAppService;
+    private readonly IrCalculationService _irCalculationService;
+    private readonly KafkaEventPublisher _kafkaEventPublisher;
     private readonly RebalancearPorDesvioUseCase _useCase;
 
     public RebalancearPorDesvioUseCaseTests()
     {
+        _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
+        _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<IDisposable>());
+        _custodiaAppService = new CustodiaAppService(_custodiaRepository, _dateTimeProvider);
+        _irCalculationService = new IrCalculationService(_vendaRepository, _dateTimeProvider, _motorSettingsOptions);
+        _kafkaEventPublisher = new KafkaEventPublisher(_kafkaProducer, Substitute.For<ILogger<KafkaEventPublisher>>(), _motorSettingsOptions);
         _useCase = new RebalancearPorDesvioUseCase(
             _cestaRepository, _clienteRepository, _custodiaRepository,
-            _vendaRepository, _cotacaoService, _kafkaProducer, _unitOfWork);
+            _cotacaoService, _custodiaAppService, _irCalculationService,
+            _kafkaEventPublisher, _dateTimeProvider, _unitOfWork, _motorSettingsOptions);
     }
 
     private void SetupCestaAtiva()

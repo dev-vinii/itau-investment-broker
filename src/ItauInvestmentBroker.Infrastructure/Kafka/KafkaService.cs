@@ -10,6 +10,7 @@ public class KafkaProducer : IKafkaProducer, IDisposable
 {
     private readonly IProducer<string, string> _producer;
     private readonly ILogger<KafkaProducer> _logger;
+    private const int MaxRetries = 3;
 
     public KafkaProducer(IConfiguration configuration, ILogger<KafkaProducer> logger)
     {
@@ -17,7 +18,10 @@ public class KafkaProducer : IKafkaProducer, IDisposable
 
         var config = new ProducerConfig
         {
-            BootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092"
+            BootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
+            MessageSendMaxRetries = MaxRetries,
+            RetryBackoffMs = 500,
+            Acks = Acks.All
         };
 
         _producer = new ProducerBuilder<string, string>(config).Build();
@@ -27,13 +31,25 @@ public class KafkaProducer : IKafkaProducer, IDisposable
     {
         var json = JsonSerializer.Serialize(message);
 
-        await _producer.ProduceAsync(topic, new Message<string, string>
+        try
         {
-            Key = key,
-            Value = json
-        });
+            var result = await _producer.ProduceAsync(topic, new Message<string, string>
+            {
+                Key = key,
+                Value = json
+            });
 
-        _logger.LogInformation("Mensagem enviada para o tópico {Topic} com chave {Key}", topic, key);
+            _logger.LogInformation(
+                "Mensagem enviada para o topico {Topic} com chave {Key}, offset {Offset}",
+                topic, key, result.Offset);
+        }
+        catch (ProduceException<string, string> ex)
+        {
+            _logger.LogError(ex,
+                "Falha ao enviar mensagem para o topico {Topic} com chave {Key}: {Reason}",
+                topic, key, ex.Error.Reason);
+            throw;
+        }
     }
 
     public void Dispose()

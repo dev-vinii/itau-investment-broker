@@ -1,6 +1,6 @@
+using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Domain.Repositories;
 using ItauInvestmentBroker.Infrastructure.Database;
-using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Infrastructure.Kafka;
 using ItauInvestmentBroker.Infrastructure.Repositories;
 using ItauInvestmentBroker.Infrastructure.Services;
@@ -15,7 +15,8 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         // DbContext
-        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' nao configurada.");
         services.AddDbContext<AppDbContext>(options =>
             options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
@@ -32,12 +33,17 @@ public static class DependencyInjection
         services.AddScoped<IHistoricoValorMensalRepository, HistoricoValorMensalRepository>();
         services.AddScoped<IVendaRebalanceamentoRepository, VendaRebalanceamentoRepository>();
 
-        // Cotações
+        // Services
+        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<ICotacaoService, CotacaoService>();
 
         // Kafka
         services.AddSingleton<IKafkaProducer, KafkaProducer>();
         services.AddHostedService<KafkaConsumerService>();
+
+        // Health Checks
+        services.AddHealthChecks()
+            .AddDbContextCheck<AppDbContext>("database");
 
         return services;
     }
