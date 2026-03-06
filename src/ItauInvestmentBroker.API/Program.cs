@@ -4,9 +4,28 @@ using ItauInvestmentBroker.Infrastructure;
 using ItauInvestmentBroker.Infrastructure.Database;
 
 var builder = WebApplication.CreateBuilder(args);
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DefaultCors", policy =>
+    {
+        if (allowedOrigins.Length == 0)
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+            return;
+        }
+
+        policy.WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -18,6 +37,7 @@ await DatabaseSeeder.SeedAsync(app.Services);
 
 app.UseMiddleware<ExceptionMiddleware>();
 app.UsePathBase("/api");
+app.UseCors("DefaultCors");
 
 if (app.Environment.IsDevelopment())
 {
