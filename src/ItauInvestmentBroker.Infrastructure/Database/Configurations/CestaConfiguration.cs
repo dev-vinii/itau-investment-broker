@@ -18,6 +18,11 @@ public class CestaConfiguration : IEntityTypeConfiguration<Cesta>
         builder.Property(c => c.DataCriacao);
         builder.Property(c => c.DataDesativacao);
 
+        // RN-018: Unique filtered index garante no maximo uma cesta ativa no banco.
+        builder.HasIndex(c => c.Ativa)
+            .IsUnique()
+            .HasFilter("Ativa = 1");
+
         builder.HasMany(c => c.Itens)
             .WithOne(i => i.Cesta)
             .HasForeignKey(i => i.CestaId);
