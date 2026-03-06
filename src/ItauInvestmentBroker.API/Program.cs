@@ -1,6 +1,7 @@
 using ItauInvestmentBroker.API.Middlewares;
 using ItauInvestmentBroker.Application;
 using ItauInvestmentBroker.Infrastructure;
+using ItauInvestmentBroker.Infrastructure.Database;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+await DatabaseSeeder.SeedAsync(app.Services);
 
 app.UseMiddleware<ExceptionMiddleware>();
 app.UsePathBase("/api");
