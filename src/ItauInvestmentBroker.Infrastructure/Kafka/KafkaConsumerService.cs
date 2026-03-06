@@ -46,10 +46,10 @@ public class KafkaConsumerService : BackgroundService
         _consumer.Subscribe(_topics);
         _logger.LogInformation("Kafka consumer inscrito nos tópicos: {Topics}", string.Join(", ", _topics));
 
-        await Task.Run(() => ConsumeLoop(stoppingToken), stoppingToken);
+        await Task.Run(() => ConsumeLoopAsync(stoppingToken), stoppingToken);
     }
 
-    private void ConsumeLoop(CancellationToken stoppingToken)
+    private async Task ConsumeLoopAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -65,8 +65,13 @@ public class KafkaConsumerService : BackgroundService
                 var handlers = scope.ServiceProvider.GetServices<IKafkaMessageHandler>();
                 var handler = handlers.FirstOrDefault(h => h.Topic == result.Topic);
 
-                handler?.HandleAsync(result.Message.Key, result.Message.Value, stoppingToken)
-                    .GetAwaiter().GetResult();
+                if (handler is null)
+                {
+                    _logger.LogWarning("Nenhum handler encontrado para o tópico {Topic}", result.Topic);
+                    continue;
+                }
+
+                await handler.HandleAsync(result.Message.Key, result.Message.Value, stoppingToken);
             }
             catch (ConsumeException ex)
             {

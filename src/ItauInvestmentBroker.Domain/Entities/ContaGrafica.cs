@@ -11,4 +11,5 @@ public class ContaGrafica : BaseEntity
     public Cliente? Cliente { get; set; }
 
     public ICollection<Custodia> Custodias { get; set; } = new List<Custodia>();
+    public ICollection<OrdemCompra> OrdensCompra { get; set; } = new List<OrdemCompra>();
 }

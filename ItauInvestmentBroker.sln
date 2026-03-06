@@ -1,12 +1,12 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Domain", "ItauInvestmentBroker.Domain\ItauInvestmentBroker.Domain.csproj", "{E969800A-60AE-447B-9CF7-33066FBC633E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Domain", "src\ItauInvestmentBroker.Domain\ItauInvestmentBroker.Domain.csproj", "{E969800A-60AE-447B-9CF7-33066FBC633E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Application", "ItauInvestmentBroker.Application\ItauInvestmentBroker.Application.csproj", "{4F489E34-1651-429C-B93B-012FFFB62F95}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Application", "src\ItauInvestmentBroker.Application\ItauInvestmentBroker.Application.csproj", "{4F489E34-1651-429C-B93B-012FFFB62F95}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Infrastructure", "ItauInvestmentBroker.Infrastructure\ItauInvestmentBroker.Infrastructure.csproj", "{61E04DDA-F246-4A78-A916-75AE8071635C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.Infrastructure", "src\ItauInvestmentBroker.Infrastructure\ItauInvestmentBroker.Infrastructure.csproj", "{61E04DDA-F246-4A78-A916-75AE8071635C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.API", "ItauInvestmentBroker.API\ItauInvestmentBroker.API.csproj", "{A6AC1669-0498-48C9-9235-E8AE93E882A2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItauInvestmentBroker.API", "src\ItauInvestmentBroker.API\ItauInvestmentBroker.API.csproj", "{A6AC1669-0498-48C9-9235-E8AE93E882A2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

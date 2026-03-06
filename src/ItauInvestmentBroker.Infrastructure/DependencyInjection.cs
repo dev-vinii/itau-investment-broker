@@ -3,6 +3,7 @@ using ItauInvestmentBroker.Infrastructure.Database;
 using ItauInvestmentBroker.Application.Interfaces;
 using ItauInvestmentBroker.Infrastructure.Kafka;
 using ItauInvestmentBroker.Infrastructure.Repositories;
+using ItauInvestmentBroker.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,10 +19,19 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
+        // Unit of Work
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
         // Repositories
         services.AddScoped<IClienteRepository, ClienteRepository>();
         services.AddScoped<IContaGraficaRepository, ContaGraficaRepository>();
         services.AddScoped<ICustodiaRepository, CustodiaRepository>();
+        services.AddScoped<ICestaRepository, CestaRepository>();
+        services.AddScoped<IOrdemCompraRepository, OrdemCompraRepository>();
+        services.AddScoped<IDistribuicaoRepository, DistribuicaoRepository>();
+
+        // Cotações
+        services.AddSingleton<ICotacaoService, CotacaoService>();
 
         // Kafka
         services.AddSingleton<IKafkaProducer, KafkaProducer>();

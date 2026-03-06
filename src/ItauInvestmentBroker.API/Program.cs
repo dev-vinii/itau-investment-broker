@@ -1,3 +1,4 @@
+using ItauInvestmentBroker.API.Middlewares;
 using ItauInvestmentBroker.Application;
 using ItauInvestmentBroker.Infrastructure;
 
@@ -11,6 +12,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionMiddleware>();
+app.UsePathBase("/api");
 
 if (app.Environment.IsDevelopment())
 {

@@ -1,0 +1,42 @@
+using FluentValidation;
+using ItauInvestmentBroker.Application.Interfaces;
+using Mapster;
+using MapsterMapper;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace ItauInvestmentBroker.Application;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddApplication(this IServiceCollection services)
+    {
+        var assembly = typeof(DependencyInjection).Assembly;
+
+        // Mapster
+        var config = TypeAdapterConfig.GlobalSettings;
+        config.Scan(assembly);
+        services.AddSingleton(config);
+        services.AddScoped<IMapper, ServiceMapper>();
+
+        // FluentValidation
+        services.AddValidatorsFromAssembly(assembly);
+
+        // Use Cases (auto-scan)
+        var useCaseTypes = assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false }
+                        && t.Name.EndsWith("UseCase"));
+
+        foreach (var useCaseType in useCaseTypes)
+            services.AddScoped(useCaseType);
+
+        // Kafka Handlers (auto-scan)
+        var handlerTypes = assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false, IsInterface: false }
+                        && typeof(IKafkaMessageHandler).IsAssignableFrom(t));
+
+        foreach (var handlerType in handlerTypes)
+            services.AddScoped(typeof(IKafkaMessageHandler), handlerType);
+
+        return services;
+    }
+}

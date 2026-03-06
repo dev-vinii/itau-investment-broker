@@ -38,6 +38,7 @@ public class KafkaProducer : IKafkaProducer, IDisposable
 
     public void Dispose()
     {
-        _producer.Dispose();
+        _producer?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
