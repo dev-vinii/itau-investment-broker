@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
+using ItauInvestmentBroker.API.Constants;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 
 namespace ItauInvestmentBroker.API.Middlewares;
@@ -11,7 +12,7 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
     public async Task InvokeAsync(HttpContext context)
     {
         var correlationId = context.TraceIdentifier;
-        context.Response.Headers["X-Correlation-Id"] = correlationId;
+        context.Response.Headers[ApiConstants.CorrelationIdHeader] = correlationId;
 
         try
         {
@@ -22,10 +23,10 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
             logger.LogWarning(ex, "Erro de validacao [CorrelationId={CorrelationId}]", correlationId);
 
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = ApiConstants.JsonContentType;
 
             var errors = ex.Errors.Select(e => new { campo = e.PropertyName, mensagem = e.ErrorMessage });
-            var response = new { erro = "Erro de validacao.", codigo = "VALIDACAO_INVALIDA", correlationId, detalhes = errors };
+            var response = new { erro = "Erro de validacao.", codigo = ApiErrorCodes.ValidacaoInvalida, correlationId, detalhes = errors };
             await context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
         }
         catch (NotFoundException ex)
@@ -41,14 +42,14 @@ public class ExceptionMiddleware(RequestDelegate next, ILogger<ExceptionMiddlewa
         catch (Exception ex)
         {
             logger.LogError(ex, "Erro inesperado [CorrelationId={CorrelationId}]", correlationId);
-            await WriteResponse(context, StatusCodes.Status500InternalServerError, "Erro interno do servidor.", "ERRO_INTERNO", correlationId);
+            await WriteResponse(context, StatusCodes.Status500InternalServerError, "Erro interno do servidor.", ApiErrorCodes.ErroInterno, correlationId);
         }
     }
 
     private static async Task WriteResponse(HttpContext context, int statusCode, string erro, string codigo, string correlationId)
     {
         context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json";
+        context.Response.ContentType = ApiConstants.JsonContentType;
         var response = new { erro, codigo, correlationId };
         await context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
     }

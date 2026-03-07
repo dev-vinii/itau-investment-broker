@@ -1,4 +1,5 @@
 using FluentValidation;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
 
 namespace ItauInvestmentBroker.Application.Features.Cestas.Validators;
@@ -13,13 +14,15 @@ public class CestaRequestValidator : AbstractValidator<CestaRequest>
 
         // RN-014: Cesta deve conter exatamente 5 ativos.
         RuleFor(x => x.Itens)
-            .Must(i => i.Count == 5)
-            .WithMessage(x => $"A cesta deve conter exatamente 5 ativos. Quantidade informada: {x.Itens.Count}.");
+            .Must(i => i.Count == BusinessConstants.QuantidadeAtivosCesta)
+            .WithMessage(x => $"A cesta deve conter exatamente {BusinessConstants.QuantidadeAtivosCesta} ativos. Quantidade informada: {x.Itens.Count}.");
 
         // RN-015: Soma dos percentuais deve ser 100% (tolerancia para precisao decimal).
         RuleFor(x => x.Itens)
-            .Must(i => Math.Abs(i.Sum(item => item.Percentual) - 100m) < 0.01m)
-            .WithMessage(x => $"A soma dos percentuais deve ser exatamente 100%. Soma atual: {x.Itens.Sum(i => i.Percentual)}%.");
+            .Must(i =>
+                Math.Abs(i.Sum(item => item.Percentual) - BusinessConstants.PercentualTotalCesta) <
+                BusinessConstants.ToleranciaPercentualCesta)
+            .WithMessage(x => $"A soma dos percentuais deve ser exatamente {BusinessConstants.PercentualTotalCesta}%. Soma atual: {x.Itens.Sum(i => i.Percentual)}%.");
 
         // RN-016: Cada percentual deve ser maior que 0%.
         RuleForEach(x => x.Itens)

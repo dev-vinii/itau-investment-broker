@@ -1,5 +1,6 @@
 using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Common.Models;
+using ItauInvestmentBroker.Infrastructure.Common.Constants;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -13,14 +14,14 @@ public class CotacaoService : ICotacaoService
 
     public CotacaoService(IConfiguration configuration, ILogger<CotacaoService> logger)
     {
-        _directoryPath = configuration["Cotahist:DirectoryPath"];
+        _directoryPath = configuration[CotahistConstants.DirectoryPathKey];
         if (string.IsNullOrEmpty(_directoryPath) || !Directory.Exists(_directoryPath))
         {
             logger.LogWarning("Diretório de cotações não encontrado: {Path}", _directoryPath);
             return;
         }
 
-        var arquivos = Directory.GetFiles(_directoryPath, "COTAHIST_D*.TXT")
+        var arquivos = Directory.GetFiles(_directoryPath, CotahistConstants.ArquivoPattern)
             .OrderBy(f => f)
             .ToList();
 
@@ -33,7 +34,10 @@ public class CotacaoService : ICotacaoService
         foreach (var arquivo in arquivos)
         {
             var cotacoes = _parser.ParseArquivo(arquivo);
-            foreach (var cotacao in cotacoes.Where(c => c.CodigoBDI is "02" or "96"))
+            foreach (var cotacao in cotacoes.Where(c =>
+                         c.CodigoBDI is CotahistConstants.CodigoBdiLotePadrao or CotahistConstants.CodigoBdiFracionario
+                         && !string.IsNullOrWhiteSpace(c.Ticker)
+                         && c.PrecoFechamento > 0))
             {
                 // RN-027: manter a cotacao de fechamento mais recente disponivel no COTAHIST.
                 _cotacoes[cotacao.Ticker] = cotacao;

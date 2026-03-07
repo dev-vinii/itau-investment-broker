@@ -1,4 +1,5 @@
 using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Motor.DTOs;
 using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Domain.Cestas.Entities;
@@ -29,10 +30,10 @@ public class IrCalculationService(
         DateTime dataOperacao)
     {
         var valorOperacao = quantidade * precoUnitario;
-        var valorIr = Math.Round(valorOperacao * _settings.AliquotaIrDedoDuro, 2);
+        var valorIr = Math.Round(valorOperacao * _settings.AliquotaIrDedoDuro, BusinessConstants.CasasDecimaisMonetarias);
 
         return new IrDedoDuroEvent(
-            Tipo: "IR_DEDO_DURO",
+            Tipo: KafkaEventTypes.IrDedoDuro,
             ClienteId: clienteId,
             Cpf: cpf,
             Ticker: ticker,
@@ -73,20 +74,22 @@ public class IrCalculationService(
         if (totalVendasMes > _settings.LimiteIsencaoVendas && lucroLiquidoMes > 0)
         {
             aliquota = _settings.AliquotaIrVenda;
-            valorIr = Math.Round(lucroLiquidoMes * _settings.AliquotaIrVenda, 2);
+            valorIr = Math.Round(lucroLiquidoMes * _settings.AliquotaIrVenda, BusinessConstants.CasasDecimaisMonetarias);
         }
 
         return new IrVendaEvent(
-            Tipo: "IR_VENDA",
+            Tipo: KafkaEventTypes.IrVenda,
             ClienteId: cliente.Id,
             Cpf: cliente.Cpf,
-            MesReferencia: agora.ToString("yyyy-MM"),
-            TotalVendasMes: Math.Round(totalVendasMes, 2),
-            LucroLiquido: Math.Round(lucroLiquidoMes, 2),
+            MesReferencia: agora.ToString(BusinessConstants.FormatoMesReferencia),
+            TotalVendasMes: Math.Round(totalVendasMes, BusinessConstants.CasasDecimaisMonetarias),
+            LucroLiquido: Math.Round(lucroLiquidoMes, BusinessConstants.CasasDecimaisMonetarias),
             Aliquota: aliquota,
             ValorIR: valorIr,
             Detalhes: vendasCliente.Select(v => new IrVendaDetalheEvent(
-                v.Ticker, v.Quantidade, v.PrecoVenda, Math.Round(v.PrecoMedio, 2), Math.Round(v.Lucro, 2)
+                v.Ticker, v.Quantidade, v.PrecoVenda,
+                Math.Round(v.PrecoMedio, BusinessConstants.CasasDecimaisMonetarias),
+                Math.Round(v.Lucro, BusinessConstants.CasasDecimaisMonetarias)
             )).ToList(),
             DataCalculo: agora
         );

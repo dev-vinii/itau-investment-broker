@@ -1,5 +1,6 @@
 using FluentAssertions;
 using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Services;
@@ -46,14 +47,16 @@ public class ExecutarCompraUseCaseTests
     {
         _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
         _unitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<IDisposable>());
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Empty<Custodia>());
         _custodiaAppService = new CustodiaAppService(_custodiaRepository, _dateTimeProvider);
         _irCalculationService = new IrCalculationService(_vendaRebalanceamentoRepository, _dateTimeProvider, _motorSettingsOptions);
         _kafkaEventPublisher = new KafkaEventPublisher(_kafkaProducer, Substitute.For<ILogger<KafkaEventPublisher>>(), _motorSettingsOptions);
         _useCase = new ExecutarCompraUseCase(
             _cestaRepository, _clienteRepository, _contaGraficaRepository,
             _custodiaRepository, _ordemCompraRepository, _distribuicaoRepository,
-            _cotacaoService, _custodiaAppService, _irCalculationService,
-            _kafkaEventPublisher, _dateTimeProvider, _unitOfWork, _motorSettingsOptions);
+            _cotacaoService, _irCalculationService,
+            _kafkaEventPublisher, Substitute.For<ILogger<ExecutarCompraUseCase>>(), _dateTimeProvider, _unitOfWork, _motorSettingsOptions);
     }
 
     private Cesta SetupCestaAtiva(params (string ticker, decimal percentual)[] itens)
@@ -190,7 +193,40 @@ public class ExecutarCompraUseCaseTests
         await _useCase.Executar();
 
         await _kafkaProducer.Received().ProduceAsync(
-            "ir-dedo-duro", Arg.Any<string>(), Arg.Any<object>());
+            KafkaTopicNames.IrDedoDuro, Arg.Any<string>(), Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Deve_Publicar_Evento_Ordem_Compra_Executada_No_Kafka()
+    {
+        SetupCestaAtiva(("PETR4", 50), ("VALE3", 50));
+        SetupClientes();
+        SetupContaMaster();
+
+        _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
+        _cotacaoService.ObterCotacao("VALE3").Returns(CotacaoFaker.Criar("VALE3", 10m));
+
+        await _useCase.Executar();
+
+        await _kafkaProducer.Received().ProduceAsync(
+            KafkaTopicNames.OrdemCompraExecutada, Arg.Any<string>(), Arg.Any<object>());
+    }
+
+    [Fact]
+    public async Task Deve_Publicar_Evento_Motor_Execucao_Falhou_No_Kafka_Quando_Erro_No_Fluxo()
+    {
+        SetupCestaAtiva(("PETR4", 100));
+        SetupClientes();
+        SetupContaMaster();
+        _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
+        _distribuicaoRepository.When(x => x.Add(Arg.Any<Distribuicao>())).Do(_ => throw new InvalidOperationException("Falha simulada"));
+
+        var act = () => _useCase.Executar();
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        await _kafkaProducer.Received().ProduceAsync(
+            KafkaTopicNames.MotorExecucaoFalhou, Arg.Any<string>(), Arg.Any<object>());
     }
 
     [Fact]
@@ -205,10 +241,11 @@ public class ExecutarCompraUseCaseTests
 
         // Saldo master de 5 unidades
         var custodiaMaster = new Custodia { Ticker = "PETR4", Quantidade = 5, PrecoMedio = 9m, ContaGraficaId = contaMaster.Id };
-        _custodiaRepository.FindByContaGraficaIdAndTicker(contaMaster.Id, "PETR4", Arg.Any<CancellationToken>())
-            .Returns(custodiaMaster);
-        _custodiaRepository.FindByContaGraficaIdAndTicker(Arg.Is<long>(id => id != contaMaster.Id), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((Custodia?)null);
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+                Arg.Is<IEnumerable<long>>(ids => ids.Contains(contaMaster.Id)),
+                Arg.Is<IEnumerable<string>>(tickers => tickers.Contains("PETR4")),
+                Arg.Any<CancellationToken>())
+            .Returns([custodiaMaster]);
 
         var result = await _useCase.Executar();
 

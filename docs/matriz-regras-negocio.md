@@ -26,7 +26,7 @@ Legenda de status:
 | RN-017 | Implementada | `CriarAtualizarCestaUseCase.cs:23-26` |
 | RN-018 | Implementada | Fluxo em `CriarAtualizarCestaUseCase.cs:20-26` + unique filtered index em `CestaConfiguration.cs` |
 | RN-019 | Implementada | `CriarAtualizarCestaUseCase.cs:33-37` |
-| RN-020 | Implementada | Agendamento externo no `docker-compose.yml` (`scheduler`) + regra 5/15/25 em `docker/scheduler/run-motor.sh` |
+| RN-020 | Implementada | Agendamento externo no `docker-compose.local.yml` (`scheduler`) + regra 5/15/25 em `docker/scheduler/run-motor.sh` |
 | RN-021 | Implementada | Ajuste para proximo dia util (segunda) em `docker/scheduler/run-motor.sh` |
 | RN-022 | Implementada | Execucao apenas segunda a sexta via `docker/scheduler/crontab` |
 | RN-023 | Implementada | `ExecutarCompraUseCase.cs:21`, `ExecutarCompraUseCase.cs:41-42` |
@@ -44,16 +44,16 @@ Legenda de status:
 | RN-035 | Implementada | `ExecutarCompraUseCase.cs:155-156` |
 | RN-036 | Implementada | `ExecutarCompraUseCase.cs:157-158` |
 | RN-037 | Implementada | `ExecutarCompraUseCase.cs:65-66` |
-| RN-038 | Implementada | `ExecutarCompraUseCase.cs:172-178`, `ExecutarCompraUseCase.cs:273-278` |
+| RN-038 | Implementada | `ExecutarCompraUseCase.cs:232-235`, `CustodiaAppService.cs:16-46` |
 | RN-039 | Implementada | `ExecutarCompraUseCase.cs:128-138`, `ExecutarCompraUseCase.cs:199-215` |
 | RN-040 | Implementada | `ExecutarCompraUseCase.cs:58-63` |
 | RN-041 | Implementada | Custodia por conta+ticker em `ExecutarCompraUseCase.cs:256-257` |
-| RN-042 | Implementada | `ExecutarCompraUseCase.cs:273-276` |
+| RN-042 | Implementada | `CustodiaAppService.cs:40-44` |
 | RN-043 | Implementada | `RebalancearCarteiraUseCase.cs:96-99` |
-| RN-044 | Implementada | Recalculo apenas nas compras em `ExecutarCompraUseCase.cs:273-276`, `RebalancearCarteiraUseCase.cs:221-224` |
+| RN-044 | Implementada | Recalculo apenas nas compras em `ExecutarCompraUseCase.cs:232-235`, `RebalancearCarteiraUseCase.cs:176-177` |
 | RN-045 | Implementada | Disparo por alteracao de cesta em `CriarAtualizarCestaUseCase.cs:33-37` |
 | RN-046 | Implementada | Identificacao de saida em `RebalancearCarteiraUseCase.cs:31-32` |
-| RN-047 | Implementada | `RebalancearCarteiraUseCase.cs:46-55`, `RebalancearCarteiraUseCase.cs:198-199` |
+| RN-047 | Implementada | `RebalancearCarteiraUseCase.cs:46-55`, `RebalancearCarteiraUseCase.cs:57-60` |
 | RN-048 | Implementada | `RebalancearCarteiraUseCase.cs:101-114`, `RebalancearCarteiraUseCase.cs:119` |
 | RN-049 | Implementada | Venda de excesso e compra de deficit para ativos remanescentes em `RebalancearCarteiraUseCase.cs` |
 | RN-050 | Implementada | `RebalancearPorDesvioUseCase.cs:26-35` |

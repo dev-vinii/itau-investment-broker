@@ -1,3 +1,4 @@
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Rentabilidade.DTOs;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 using ItauInvestmentBroker.Application.Common.Interfaces;
@@ -53,12 +54,12 @@ public class ConsultarRentabilidadeUseCase(
                 // RN-068: Exibir quantidade por ativo.
                 Quantidade: custodia.Quantidade,
                 // RN-067: Exibir preco medio por ativo.
-                PrecoMedio: Math.Round(custodia.PrecoMedio, 2),
+                PrecoMedio: Math.Round(custodia.PrecoMedio, BusinessConstants.CasasDecimaisMonetarias),
                 // RN-069: Exibir cotacao atual por ativo.
                 CotacaoAtual: cotacaoAtual,
-                ValorAtual: Math.Round(valorAtual, 2),
+                ValorAtual: Math.Round(valorAtual, BusinessConstants.CasasDecimaisMonetarias),
                 // RN-064: Exibir P/L por ativo.
-                Pl: Math.Round(pl, 2),
+                Pl: Math.Round(pl, BusinessConstants.CasasDecimaisMonetarias),
                 ComposicaoPercentual: 0
             ));
         }
@@ -67,7 +68,7 @@ public class ConsultarRentabilidadeUseCase(
         var ativosComPercentual = ativos.Select(a => a with
         {
             ComposicaoPercentual = valorAtualTotal > 0
-                ? Math.Round(a.ValorAtual / valorAtualTotal * 100, 2)
+                ? Math.Round(a.ValorAtual / valorAtualTotal * TradingConstants.PercentualBase, BusinessConstants.CasasDecimaisMonetarias)
                 : 0
         }).ToList();
 
@@ -75,16 +76,18 @@ public class ConsultarRentabilidadeUseCase(
         var plTotal = valorAtualTotal - valorInvestidoTotal;
         // RN-066: Rentabilidade percentual da carteira.
         var rentabilidade = valorInvestidoTotal > 0
-            ? Math.Round((valorAtualTotal - valorInvestidoTotal) / valorInvestidoTotal * 100, 2)
+            ? Math.Round(
+                (valorAtualTotal - valorInvestidoTotal) / valorInvestidoTotal * TradingConstants.PercentualBase,
+                BusinessConstants.CasasDecimaisMonetarias)
             : 0;
 
         return new RentabilidadeResponse(
             ClienteId: cliente.Id,
             Nome: cliente.Nome,
             // RN-063: Saldo total/valor investido e valor atual total da carteira.
-            ValorInvestidoTotal: Math.Round(valorInvestidoTotal, 2),
-            ValorAtualTotal: Math.Round(valorAtualTotal, 2),
-            PlTotal: Math.Round(plTotal, 2),
+            ValorInvestidoTotal: Math.Round(valorInvestidoTotal, BusinessConstants.CasasDecimaisMonetarias),
+            ValorAtualTotal: Math.Round(valorAtualTotal, BusinessConstants.CasasDecimaisMonetarias),
+            PlTotal: Math.Round(plTotal, BusinessConstants.CasasDecimaisMonetarias),
             RentabilidadePercentual: rentabilidade,
             Ativos: ativosComPercentual
         );

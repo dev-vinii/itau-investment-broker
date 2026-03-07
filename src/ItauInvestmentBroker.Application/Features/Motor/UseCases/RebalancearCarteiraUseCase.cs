@@ -1,4 +1,5 @@
 using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Motor.DTOs;
 using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Services;
@@ -90,7 +91,7 @@ public class RebalancearCarteiraUseCase(
                     continue;
 
                 var valorAtual = custodia.Quantidade * cotacao.PrecoFechamento;
-                var valorAlvo = valorTotalCarteira * (itemNovo.Percentual / 100m);
+                var valorAlvo = valorTotalCarteira * (itemNovo.Percentual / TradingConstants.PercentualBase);
                 var diferenca = valorAtual - valorAlvo;
 
                 if (diferenca > cotacao.PrecoFechamento)
@@ -151,7 +152,7 @@ public class RebalancearCarteiraUseCase(
         // RN-049: Ativos remanescentes com deficit
         foreach (var (ticker, deficit, preco) in tickersComDeficit)
         {
-            var pesoDeficit = deficit / valorTotalCarteira * 100m;
+            var pesoDeficit = deficit / valorTotalCarteira * TradingConstants.PercentualBase;
             tickersParaComprar.Add((ticker, pesoDeficit, preco));
         }
 
@@ -177,7 +178,7 @@ public class RebalancearCarteiraUseCase(
                 contaGraficaId, ticker, quantidade, preco, cancellationToken);
 
             eventos.Add(irCalculationService.CalcularIrDedoDuro(
-                cliente.Id, cliente.Cpf, ticker, "COMPRA",
+                cliente.Id, cliente.Cpf, ticker, TradingConstants.TipoOperacaoCompra,
                 quantidade, preco, dateTimeProvider.UtcNow));
         }
 

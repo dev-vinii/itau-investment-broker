@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using ItauInvestmentBroker.Application.Common.Interfaces;
+using ItauInvestmentBroker.Infrastructure.Common.Constants;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -26,8 +27,8 @@ public class KafkaConsumerService : BackgroundService
 
         var config = new ConsumerConfig
         {
-            BootstrapServers = configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
-            GroupId = configuration["Kafka:GroupId"] ?? "itau-investment-broker",
+            BootstrapServers = configuration[KafkaConstants.BootstrapServersKey] ?? KafkaConstants.DefaultBootstrapServers,
+            GroupId = configuration[KafkaConstants.GroupIdKey] ?? KafkaConstants.DefaultGroupId,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = true
         };

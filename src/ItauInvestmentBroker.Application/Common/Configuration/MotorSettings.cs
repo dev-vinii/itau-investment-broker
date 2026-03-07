@@ -1,3 +1,5 @@
+using ItauInvestmentBroker.Application.Common.Constants;
+
 namespace ItauInvestmentBroker.Application.Common.Configuration;
 
 public class MotorSettings
@@ -10,6 +12,8 @@ public class MotorSettings
     public decimal AliquotaIrVenda { get; set; } = 0.20m;
     public decimal LimiteIsencaoVendas { get; set; } = 20_000m;
     public decimal LimiarDesvioPontos { get; set; } = 5m;
-    public string TopicoIrDedoDuro { get; set; } = "ir-dedo-duro";
-    public string TopicoIrVenda { get; set; } = "ir-venda";
+    public string TopicoIrDedoDuro { get; set; } = KafkaTopicNames.IrDedoDuro;
+    public string TopicoIrVenda { get; set; } = KafkaTopicNames.IrVenda;
+    public string TopicoOrdemCompraExecutada { get; set; } = KafkaTopicNames.OrdemCompraExecutada;
+    public string TopicoMotorExecucaoFalhou { get; set; } = KafkaTopicNames.MotorExecucaoFalhou;
 }

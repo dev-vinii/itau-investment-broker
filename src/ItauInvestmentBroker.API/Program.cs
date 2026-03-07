@@ -1,3 +1,4 @@
+using ItauInvestmentBroker.API.Constants;
 using ItauInvestmentBroker.API.Middlewares;
 using ItauInvestmentBroker.Application;
 using ItauInvestmentBroker.Infrastructure;
@@ -11,7 +12,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("DefaultCors", policy =>
+    options.AddPolicy(ApiConstants.DefaultCorsPolicy, policy =>
     {
         if (allowedOrigins.Length == 0)
         {
@@ -37,7 +38,7 @@ await DatabaseSeeder.SeedAsync(app.Services);
 
 app.UseMiddleware<ExceptionMiddleware>();
 app.UsePathBase("/api");
-app.UseCors("DefaultCors");
+app.UseCors(ApiConstants.DefaultCorsPolicy);
 
 if (app.Environment.IsDevelopment())
 {

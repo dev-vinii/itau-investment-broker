@@ -1,4 +1,5 @@
 using FluentValidation;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 using ItauInvestmentBroker.Application.Common.Interfaces;
@@ -38,7 +39,9 @@ public class AdesaoClienteUseCase(
         var cliente = request.Adapt<Cliente>();
         var contaFilhote = new ContaGrafica
         {
-            NumeroConta = Guid.NewGuid().ToString("N")[..10].ToUpper(),
+            NumeroConta = Guid.NewGuid()
+                .ToString(BusinessConstants.FormatoGuidSemHifen)[..BusinessConstants.TamanhoNumeroContaFilhote]
+                .ToUpper(),
             Tipo = TipoConta.FILHOTE
         };
         cliente.ContaGrafica = contaFilhote;

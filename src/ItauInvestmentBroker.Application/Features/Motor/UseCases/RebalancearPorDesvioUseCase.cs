@@ -1,4 +1,5 @@
 using ItauInvestmentBroker.Application.Common.Configuration;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Motor.DTOs;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 using ItauInvestmentBroker.Application.Common.Interfaces;
@@ -103,7 +104,7 @@ public class RebalancearPorDesvioUseCase(
         // RN-052: Vender ativos sobre-alocados.
         foreach (var desvio in desvios.Where(d => d.Desvio > 0))
         {
-            var valorAlvo = valorTotalCarteira * (desvio.PercentualAlvo / 100m);
+            var valorAlvo = valorTotalCarteira * (desvio.PercentualAlvo / TradingConstants.PercentualBase);
             var valorAtual = desvio.Custodia.Quantidade * desvio.PrecoAtual;
             var excesso = valorAtual - valorAlvo;
 
@@ -143,7 +144,7 @@ public class RebalancearPorDesvioUseCase(
                         desvio.PrecoAtual, cancellationToken);
 
                     eventosIrDedoDuro.Add(irCalculationService.CalcularIrDedoDuro(
-                        cliente.Id, cliente.Cpf, desvio.Ticker, "COMPRA",
+                        cliente.Id, cliente.Cpf, desvio.Ticker, TradingConstants.TipoOperacaoCompra,
                         quantidade, desvio.PrecoAtual, dateTimeProvider.UtcNow));
                 }
             }
@@ -173,7 +174,7 @@ public class RebalancearPorDesvioUseCase(
                 continue;
 
             var valorAtual = custodia.Quantidade * cotacao.PrecoFechamento;
-            var percentualReal = valorAtual / valorTotalCarteira * 100m;
+            var percentualReal = valorAtual / valorTotalCarteira * TradingConstants.PercentualBase;
             var desvio = percentualReal - percentualAlvo;
 
             if (Math.Abs(desvio) >= _settings.LimiarDesvioPontos)

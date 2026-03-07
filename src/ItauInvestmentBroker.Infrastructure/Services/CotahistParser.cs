@@ -10,6 +10,7 @@ public class CotahistParser
     private const string RecordTypeDetail = "01";
     private const int MarketTypeSpot = 10;
     private const int MarketTypeFractional = 20;
+    private const decimal PrecoScaleDivisor = 100m;
 
     static CotahistParser()
     {
@@ -70,7 +71,7 @@ public class CotahistParser
     private static decimal ParsePreco(string valorBruto)
     {
         if (long.TryParse(valorBruto.Trim(), out var valor))
-            return valor / 100m;
+            return valor / PrecoScaleDivisor;
         return 0m;
     }
 

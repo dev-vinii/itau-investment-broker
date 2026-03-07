@@ -1,4 +1,5 @@
 using FluentValidation;
+using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 
 namespace ItauInvestmentBroker.Application.Features.Clientes.Validators;
@@ -14,7 +15,7 @@ public class AdesaoRequestValidator : AbstractValidator<AdesaoRequest>
         // RN-001: CPF e obrigatorio na adesao.
         RuleFor(x => x.Cpf)
             .NotEmpty().WithMessage("O CPF é obrigatório.")
-            .Length(11).WithMessage("O CPF deve conter 11 caracteres.");
+            .Length(BusinessConstants.CpfLength).WithMessage($"O CPF deve conter {BusinessConstants.CpfLength} caracteres.");
 
         // RN-001: Email e obrigatorio na adesao.
         RuleFor(x => x.Email)
@@ -23,7 +24,7 @@ public class AdesaoRequestValidator : AbstractValidator<AdesaoRequest>
 
         // RN-003: Valor mensal minimo de adesao e R$100.
         RuleFor(x => x.ValorMensal)
-            .GreaterThanOrEqualTo(100)
-            .WithMessage("O valor mensal mínimo é R$100.");
+            .GreaterThanOrEqualTo(BusinessConstants.ValorMensalMinimo)
+            .WithMessage($"O valor mensal mínimo é R${BusinessConstants.ValorMensalMinimo:0}.");
     }
 }
