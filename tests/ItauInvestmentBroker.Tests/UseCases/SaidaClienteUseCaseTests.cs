@@ -33,9 +33,15 @@ public class SaidaClienteUseCaseTests
         var cliente = ClienteFaker.Criar().Generate();
         _clienteRepository.FindById(cliente.Id, Arg.Any<CancellationToken>()).Returns(cliente);
 
-        await _useCase.Executar(cliente.Id);
+        var response = await _useCase.Executar(cliente.Id);
 
         cliente.Ativo.Should().BeFalse();
+        response.ClienteId.Should().Be(cliente.Id);
+        response.Nome.Should().Be(cliente.Nome);
+        response.Cpf.Should().Be(cliente.Cpf);
+        response.Email.Should().Be(cliente.Email);
+        response.DataAdesao.Should().Be(cliente.DataAdesao);
+        response.DataSaida.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
     }
 

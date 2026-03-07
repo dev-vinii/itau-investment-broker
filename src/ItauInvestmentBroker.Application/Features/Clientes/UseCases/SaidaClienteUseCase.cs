@@ -1,4 +1,5 @@
 using ItauInvestmentBroker.Application.Common.Exceptions;
+using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 using ItauInvestmentBroker.Domain.Cestas.Repositories;
 using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
@@ -8,7 +9,7 @@ namespace ItauInvestmentBroker.Application.Features.Clientes.UseCases;
 
 public class SaidaClienteUseCase(IClienteRepository clienteRepository, IUnitOfWork unitOfWork)
 {
-    public async Task Executar(long clienteId, CancellationToken cancellationToken = default)
+    public async Task<SaidaResponse> Executar(long clienteId, CancellationToken cancellationToken = default)
     {
         var cliente = await clienteRepository.FindById(clienteId, cancellationToken)
             ?? throw new NotFoundException(
@@ -24,5 +25,14 @@ public class SaidaClienteUseCase(IClienteRepository clienteRepository, IUnitOfWo
         // RN-008: Nao ha venda automatica de custodia no processo de saida.
         cliente.Ativo = false;
         await unitOfWork.CommitAsync(cancellationToken);
+
+        return new SaidaResponse(
+            cliente.Id,
+            cliente.Nome,
+            cliente.Cpf,
+            cliente.Email,
+            cliente.DataAdesao,
+            DateTime.UtcNow
+        );
     }
 }

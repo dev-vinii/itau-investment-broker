@@ -24,12 +24,12 @@ public class ClientesController(
     }
 
     [HttpPost("{id:long}/saida")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(SaidaResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Saida(long id, CancellationToken cancellationToken)
     {
-        await saidaCliente.Executar(id, cancellationToken);
-        return NoContent();
+        var response = await saidaCliente.Executar(id, cancellationToken);
+        return Ok(response);
     }
 
     [HttpPut("{id:long}/valor-mensal")]
