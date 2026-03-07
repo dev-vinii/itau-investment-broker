@@ -4,21 +4,13 @@ using FluentValidation.Results;
 using ItauInvestmentBroker.Application.Common.Configuration;
 using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
 using ItauInvestmentBroker.Application.Common.Interfaces;
-using ItauInvestmentBroker.Application.Services;
-using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
 using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
-using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
+using ItauInvestmentBroker.Application.Features.Motor.DTOs;
 using ItauInvestmentBroker.Domain.Cestas.Entities;
-using ItauInvestmentBroker.Domain.Clientes.Entities;
-using ItauInvestmentBroker.Domain.Motor.Entities;
 using ItauInvestmentBroker.Domain.Cestas.Repositories;
-using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
-using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
 using Mapster;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 
@@ -30,7 +22,7 @@ public class CriarAtualizarCestaUseCaseTests
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IValidator<CestaRequest> _validator = Substitute.For<IValidator<CestaRequest>>();
     private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
-    private readonly RebalancearCarteiraUseCase _rebalancear;
+    private readonly IKafkaProducer _kafkaProducer = Substitute.For<IKafkaProducer>();
     private readonly CriarAtualizarCestaUseCase _useCase;
 
     public CriarAtualizarCestaUseCaseTests()
@@ -41,29 +33,10 @@ public class CriarAtualizarCestaUseCaseTests
         _validator.ValidateAsync(Arg.Any<ValidationContext<CestaRequest>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        var clienteRepo = Substitute.For<IClienteRepository>();
-        clienteRepo.FindAtivos(Arg.Any<CancellationToken>()).Returns(Enumerable.Empty<Cliente>());
-        var custodiaRepository = Substitute.For<ICustodiaRepository>();
-        var vendaRebalanceamentoRepository = Substitute.For<IVendaRebalanceamentoRepository>();
-        var kafkaProducer = Substitute.For<IKafkaProducer>();
         var motorSettingsOptions = Options.Create(new MotorSettings());
-        var custodiaAppService = new CustodiaAppService(custodiaRepository, _dateTimeProvider);
-        var irCalculationService = new IrCalculationService(vendaRebalanceamentoRepository, _dateTimeProvider, motorSettingsOptions);
-        var kafkaEventPublisher = new KafkaEventPublisher(kafkaProducer, Substitute.For<ILogger<KafkaEventPublisher>>(), motorSettingsOptions);
-        var rebalancearUnitOfWork = Substitute.For<IUnitOfWork>();
-        rebalancearUnitOfWork.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<IDisposable>());
-
-        _rebalancear = new RebalancearCarteiraUseCase(
-            clienteRepo,
-            custodiaRepository,
-            Substitute.For<ICotacaoService>(),
-            custodiaAppService,
-            irCalculationService,
-            kafkaEventPublisher,
-            _dateTimeProvider,
-            rebalancearUnitOfWork,
-            motorSettingsOptions);
-        _useCase = new CriarAtualizarCestaUseCase(_cestaRepository, _unitOfWork, _validator, _dateTimeProvider, _rebalancear);
+        _useCase = new CriarAtualizarCestaUseCase(
+            _cestaRepository, _unitOfWork, _validator, _dateTimeProvider,
+            _kafkaProducer, motorSettingsOptions);
     }
 
     [Fact]
@@ -77,10 +50,12 @@ public class CriarAtualizarCestaUseCaseTests
         result.Nome.Should().Be(request.Nome);
         _cestaRepository.Received(1).Add(Arg.Any<Cesta>());
         await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        await _kafkaProducer.DidNotReceive().ProduceAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<RebalanceamentoCarteiraCommand>());
     }
 
     [Fact]
-    public async Task Deve_Desativar_Cesta_Anterior_E_Disparar_Rebalanceamento()
+    public async Task Deve_Desativar_Cesta_Anterior_E_Publicar_Rebalanceamento()
     {
         var cestaAntiga = CestaFaker.Criar().Generate();
         _cestaRepository.FindAtiva(Arg.Any<CancellationToken>()).Returns(cestaAntiga);
@@ -90,16 +65,21 @@ public class CriarAtualizarCestaUseCaseTests
 
         cestaAntiga.Ativa.Should().BeFalse();
         cestaAntiga.DataDesativacao.Should().NotBeNull();
+        await _kafkaProducer.Received(1).ProduceAsync(
+            "rebalanceamento-carteira",
+            Arg.Any<string>(),
+            Arg.Any<RebalanceamentoCarteiraCommand>());
     }
 
     [Fact]
-    public async Task Nao_Deve_Disparar_Rebalanceamento_Quando_Nao_Ha_Cesta_Anterior()
+    public async Task Nao_Deve_Publicar_Rebalanceamento_Quando_Nao_Ha_Cesta_Anterior()
     {
         _cestaRepository.FindAtiva(Arg.Any<CancellationToken>()).Returns((Cesta?)null);
         var request = RequestFaker.CestaRequest().Generate();
 
         await _useCase.Executar(request);
 
-        _cestaRepository.DidNotReceive().Update(Arg.Any<Cesta>());
+        await _kafkaProducer.DidNotReceive().ProduceAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<RebalanceamentoCarteiraCommand>());
     }
 }

@@ -6,4 +6,5 @@ public static class KafkaTopicNames
     public const string IrVenda = "ir-venda";
     public const string OrdemCompraExecutada = "ordem-compra-executada";
     public const string MotorExecucaoFalhou = "motor-execucao-falhou";
+    public const string RebalanceamentoCarteira = "rebalanceamento-carteira";
 }

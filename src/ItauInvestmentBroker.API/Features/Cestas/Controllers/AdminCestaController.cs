@@ -1,8 +1,5 @@
 using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
-using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
 using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
-using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ItauInvestmentBroker.API.Features.Cestas.Controllers;

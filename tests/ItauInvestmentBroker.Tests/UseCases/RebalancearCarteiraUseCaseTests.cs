@@ -45,14 +45,22 @@ public class RebalancearCarteiraUseCaseTests
         _useCase = new RebalancearCarteiraUseCase(
             _clienteRepository, _custodiaRepository, _cotacaoService,
             _custodiaAppService, _irCalculationService, _kafkaEventPublisher,
-            _dateTimeProvider, _unitOfWork, _motorSettingsOptions);
+            _dateTimeProvider, _unitOfWork,
+            Substitute.For<ILogger<RebalancearCarteiraUseCase>>(),
+            _motorSettingsOptions);
+    }
+
+    private void SetupClientes(params Cliente[] clientes)
+    {
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(clientes.Length);
+        _clienteRepository.FindAtivosPaginado(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(clientes.ToList());
     }
 
     [Fact]
     public async Task Deve_Retornar_Sem_Acao_Quando_Sem_Clientes_Ativos()
     {
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<Cliente>());
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(0);
 
         await _useCase.Executar(
             CestaFaker.CriarComTickers("PETR4", "VALE3"),
@@ -66,13 +74,13 @@ public class RebalancearCarteiraUseCaseTests
     {
         var cliente = ClienteFaker.CriarComConta().Generate();
         var contaId = cliente.ContaGrafica!.Id;
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
 
         var custodiaPetr = new Custodia { Ticker = "PETR4", Quantidade = 100, PrecoMedio = 25m, ContaGraficaId = contaId };
-        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "PETR4", Arg.Any<CancellationToken>()).Returns(custodiaPetr);
-        _custodiaRepository.FindByContaGraficaId(contaId, Arg.Any<CancellationToken>())
-            .Returns(new List<Custodia> { new() { Ticker = "VALE3", Quantidade = 50, PrecoMedio = 60m } }.AsEnumerable());
+        var custodiaVale = new Custodia { Ticker = "VALE3", Quantidade = 50, PrecoMedio = 60m, ContaGraficaId = contaId };
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Custodia> { custodiaPetr, custodiaVale }.AsEnumerable());
 
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 30m));
         _cotacaoService.ObterCotacao("VALE3").Returns(CotacaoFaker.Criar("VALE3", 70m));
@@ -80,6 +88,10 @@ public class RebalancearCarteiraUseCaseTests
 
         _vendaRepository.SomarVendasMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
         _vendaRepository.SomarLucroMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
+
+        // AtualizarCustodia para novos ativos (ITUB4)
+        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "ITUB4", Arg.Any<CancellationToken>())
+            .Returns((Custodia?)null);
 
         await _useCase.Executar(
             CestaFaker.CriarComTickers("PETR4", "VALE3"),
@@ -95,20 +107,22 @@ public class RebalancearCarteiraUseCaseTests
     {
         var cliente = ClienteFaker.CriarComConta().Generate();
         var contaId = cliente.ContaGrafica!.Id;
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
 
         // Venda grande: 1000 * 30 = R$30.000 > R$20.000
         var custodiaPetr = new Custodia { Ticker = "PETR4", Quantidade = 1000, PrecoMedio = 25m, ContaGraficaId = contaId };
-        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "PETR4", Arg.Any<CancellationToken>()).Returns(custodiaPetr);
-        _custodiaRepository.FindByContaGraficaId(contaId, Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<Custodia>());
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Custodia> { custodiaPetr }.AsEnumerable());
 
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 30m));
         _cotacaoService.ObterCotacao("ITUB4").Returns(CotacaoFaker.Criar("ITUB4", 25m));
 
         _vendaRepository.SomarVendasMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
         _vendaRepository.SomarLucroMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
+
+        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "ITUB4", Arg.Any<CancellationToken>())
+            .Returns((Custodia?)null);
 
         await _useCase.Executar(
             CestaFaker.CriarComTickers("PETR4"),
@@ -122,20 +136,22 @@ public class RebalancearCarteiraUseCaseTests
     {
         var cliente = ClienteFaker.CriarComConta().Generate();
         var contaId = cliente.ContaGrafica!.Id;
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
 
         // Venda pequena: 10 * 30 = R$300 < R$20.000
         var custodiaPetr = new Custodia { Ticker = "PETR4", Quantidade = 10, PrecoMedio = 25m, ContaGraficaId = contaId };
-        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "PETR4", Arg.Any<CancellationToken>()).Returns(custodiaPetr);
-        _custodiaRepository.FindByContaGraficaId(contaId, Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<Custodia>());
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<Custodia> { custodiaPetr }.AsEnumerable());
 
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 30m));
         _cotacaoService.ObterCotacao("ITUB4").Returns(CotacaoFaker.Criar("ITUB4", 25m));
 
         _vendaRepository.SomarVendasMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
         _vendaRepository.SomarLucroMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
+
+        _custodiaRepository.FindByContaGraficaIdAndTicker(contaId, "ITUB4", Arg.Any<CancellationToken>())
+            .Returns((Custodia?)null);
 
         await _useCase.Executar(
             CestaFaker.CriarComTickers("PETR4"),
@@ -149,8 +165,11 @@ public class RebalancearCarteiraUseCaseTests
     public async Task Deve_Pular_Cliente_Sem_ContaGrafica()
     {
         var cliente = ClienteFaker.Criar().Generate(); // sem conta
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
+
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Empty<Custodia>());
 
         await _useCase.Executar(
             CestaFaker.CriarComTickers("PETR4"),

@@ -6,5 +6,6 @@ namespace ItauInvestmentBroker.Domain.Cestas.Repositories;
 public interface ICestaRepository : IBaseRepository<Cesta>
 {
     Task<Cesta?> FindAtiva(CancellationToken cancellationToken = default);
+    Task<Cesta?> FindByIdWithItens(long id, CancellationToken cancellationToken = default);
     Task<IEnumerable<Cesta>> FindAllWithItens(CancellationToken cancellationToken = default);
 }

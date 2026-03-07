@@ -1,7 +1,4 @@
 using ItauInvestmentBroker.Application.Features.Rentabilidade.DTOs;
-using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
-using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
 using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
 using Microsoft.AspNetCore.Mvc;
 

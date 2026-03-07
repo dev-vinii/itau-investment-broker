@@ -3,16 +3,12 @@ using FluentValidation;
 using FluentValidation.Results;
 using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 using ItauInvestmentBroker.Application.Common.Exceptions;
+using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
-using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
-using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
-using ItauInvestmentBroker.Domain.Cestas.Entities;
 using ItauInvestmentBroker.Domain.Clientes.Entities;
-using ItauInvestmentBroker.Domain.Motor.Entities;
-using ItauInvestmentBroker.Domain.Cestas.Repositories;
 using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
+using ItauInvestmentBroker.Domain.Motor.Entities;
 using ItauInvestmentBroker.Domain.Motor.Repositories;
 using ItauInvestmentBroker.Tests.Fakers;
 using NSubstitute;
@@ -25,13 +21,16 @@ public class AtualizarValorMensalUseCaseTests
     private readonly IHistoricoValorMensalRepository _historicoRepository = Substitute.For<IHistoricoValorMensalRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly IValidator<ValorMensalRequest> _validator = Substitute.For<IValidator<ValorMensalRequest>>();
+    private readonly IDateTimeProvider _dateTimeProvider = Substitute.For<IDateTimeProvider>();
     private readonly AtualizarValorMensalUseCase _useCase;
 
     public AtualizarValorMensalUseCaseTests()
     {
+        _dateTimeProvider.UtcNow.Returns(DateTime.UtcNow);
         _validator.ValidateAsync(Arg.Any<ValidationContext<ValorMensalRequest>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
-        _useCase = new AtualizarValorMensalUseCase(_clienteRepository, _historicoRepository, _unitOfWork, _validator);
+        _useCase = new AtualizarValorMensalUseCase(
+            _clienteRepository, _historicoRepository, _unitOfWork, _validator, _dateTimeProvider);
     }
 
     [Fact]
@@ -42,9 +41,14 @@ public class AtualizarValorMensalUseCaseTests
         _clienteRepository.FindById(cliente.Id, Arg.Any<CancellationToken>()).Returns(cliente);
         var request = RequestFaker.ValorMensalRequest().Generate();
 
-        await _useCase.Executar(cliente.Id, request);
+        var result = await _useCase.Executar(cliente.Id, request);
 
         cliente.ValorMensal.Should().Be(request.ValorMensal);
+        result.ClienteId.Should().Be(cliente.Id);
+        result.ValorMensalAnterior.Should().Be(valorAnterior);
+        result.ValorMensalNovo.Should().Be(request.ValorMensal);
+        result.DataAlteracao.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        result.Mensagem.Should().NotBeNullOrEmpty();
         _historicoRepository.Received(1).Add(Arg.Is<HistoricoValorMensal>(h =>
             h.ClienteId == cliente.Id && h.ValorAnterior == valorAnterior && h.ValorNovo == request.ValorMensal));
         await _unitOfWork.Received(1).CommitAsync(Arg.Any<CancellationToken>());
@@ -79,7 +83,8 @@ public class AtualizarValorMensalUseCaseTests
     public async Task Deve_Lancar_Quando_Validacao_Falha()
     {
         var realValidator = new ItauInvestmentBroker.Application.Features.Clientes.Validators.ValorMensalRequestValidator();
-        var useCase = new AtualizarValorMensalUseCase(_clienteRepository, _historicoRepository, _unitOfWork, realValidator);
+        var useCase = new AtualizarValorMensalUseCase(
+            _clienteRepository, _historicoRepository, _unitOfWork, realValidator, _dateTimeProvider);
 
         var act = () => useCase.Executar(1L, new ValorMensalRequest(10m));
 

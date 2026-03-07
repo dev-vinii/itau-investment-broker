@@ -19,6 +19,13 @@ public class CestaRepository(AppDbContext context) : BaseRepository<Cesta>(conte
             .FirstOrDefaultAsync(c => c.Ativa, cancellationToken);
     }
 
+    public async Task<Cesta?> FindByIdWithItens(long id, CancellationToken cancellationToken = default)
+    {
+        return await DbSet
+            .Include(c => c.Itens)
+            .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+    }
+
     public async Task<IEnumerable<Cesta>> FindAllWithItens(CancellationToken cancellationToken = default)
     {
         return await DbSet

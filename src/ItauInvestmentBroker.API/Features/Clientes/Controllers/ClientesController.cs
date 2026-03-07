@@ -1,8 +1,5 @@
 using ItauInvestmentBroker.Application.Features.Clientes.DTOs;
 using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
-using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
-using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ItauInvestmentBroker.API.Features.Clientes.Controllers;
@@ -33,11 +30,11 @@ public class ClientesController(
     }
 
     [HttpPut("{id:long}/valor-mensal")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValorMensalResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AtualizarValorMensal(long id, [FromBody] ValorMensalRequest request, CancellationToken cancellationToken)
     {
-        await atualizarValorMensal.Executar(id, request, cancellationToken);
-        return NoContent();
+        var response = await atualizarValorMensal.Executar(id, request, cancellationToken);
+        return Ok(response);
     }
 }

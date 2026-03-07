@@ -11,6 +11,7 @@ using ItauInvestmentBroker.Domain.Cestas.Repositories;
 using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
 using ItauInvestmentBroker.Domain.Motor.Repositories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ItauInvestmentBroker.Application.Features.Motor.UseCases;
@@ -25,6 +26,7 @@ public class RebalancearPorDesvioUseCase(
     KafkaEventPublisher kafkaEventPublisher,
     IDateTimeProvider dateTimeProvider,
     IUnitOfWork unitOfWork,
+    ILogger<RebalancearPorDesvioUseCase> logger,
     IOptions<MotorSettings> motorSettings)
 {
     private readonly MotorSettings _settings = motorSettings.Value;
@@ -36,48 +38,81 @@ public class RebalancearPorDesvioUseCase(
             ?? throw new NotFoundException("Nenhuma cesta ativa encontrada.", ErrorCodes.CestaNaoEncontrada);
 
         // RN-024: Apenas clientes ativos participam do rebalanceamento.
-        var clientes = (await clienteRepository.FindAtivos(cancellationToken)).ToList();
-        if (clientes.Count == 0)
+        var totalClientes = await clienteRepository.CountAtivos(cancellationToken);
+        if (totalClientes == 0)
             throw new BusinessException("Nenhum cliente ativo encontrado.", ErrorCodes.ClienteNaoEncontrado);
 
         var percentuaisAlvo = cesta.Itens.ToDictionary(i => i.Ticker, i => i.Percentual);
-        var eventosIrDedoDuro = new List<IrDedoDuroEvent>();
-        var eventosIrVenda = new List<IrVendaEvent>();
+        var tickersCesta = percentuaisAlvo.Keys.ToList();
         var clientesRebalanceados = 0;
+        var tamanhoLote = _settings.TamanhoLoteRebalanceamento;
 
-        foreach (var cliente in clientes)
+        for (var skip = 0; skip < totalClientes; skip += tamanhoLote)
         {
-            var contaGrafica = cliente.ContaGrafica;
-            if (contaGrafica is null)
-                continue;
+            var lote = await clienteRepository.FindAtivosPaginado(skip, tamanhoLote, cancellationToken);
+            if (lote.Count == 0)
+                break;
 
-            var resultado = await RebalancearCliente(
-                cliente, contaGrafica, percentuaisAlvo, cancellationToken);
+            // Bulk load: carregar todas as custodias do lote de uma vez
+            var contaGraficaIds = lote
+                .Where(c => c.ContaGrafica is not null)
+                .Select(c => c.ContaGrafica!.Id)
+                .ToList();
 
-            if (resultado is null)
-                continue;
+            var todasCustodias = (await custodiaRepository.FindByContaGraficaIdsAndTickers(
+                contaGraficaIds, tickersCesta, cancellationToken)).ToList();
 
-            clientesRebalanceados++;
-            eventosIrDedoDuro.AddRange(resultado.Value.EventosDedoDuro);
-            if (resultado.Value.EventoVenda is not null)
-                eventosIrVenda.Add(resultado.Value.EventoVenda);
+            var custodiasPorConta = todasCustodias
+                .GroupBy(c => c.ContaGraficaId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var eventosIrDedoDuro = new List<IrDedoDuroEvent>();
+            var eventosIrVenda = new List<IrVendaEvent>();
+
+            foreach (var cliente in lote)
+            {
+                try
+                {
+                    var contaGrafica = cliente.ContaGrafica;
+                    if (contaGrafica is null)
+                        continue;
+
+                    custodiasPorConta.TryGetValue(contaGrafica.Id, out var custodiasCliente);
+                    custodiasCliente ??= [];
+
+                    var resultado = await RebalancearCliente(
+                        cliente, contaGrafica, custodiasCliente, percentuaisAlvo, cancellationToken);
+
+                    if (resultado is null)
+                        continue;
+
+                    clientesRebalanceados++;
+                    eventosIrDedoDuro.AddRange(resultado.Value.EventosDedoDuro);
+                    if (resultado.Value.EventoVenda is not null)
+                        eventosIrVenda.Add(resultado.Value.EventoVenda);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Erro ao rebalancear por desvio do cliente {ClienteId}. Continuando com os demais",
+                        cliente.Id);
+                }
+            }
+
+            // RN-055/RN-062: Persistir antes da publicacao.
+            await unitOfWork.CommitAsync(cancellationToken);
+            await kafkaEventPublisher.PublicarEventosIr(eventosIrDedoDuro, eventosIrVenda);
         }
-
-        // RN-055/RN-062: Persistir antes da publicacao.
-        await unitOfWork.CommitAsync(cancellationToken);
-
-        await kafkaEventPublisher.PublicarEventosIr(eventosIrDedoDuro, eventosIrVenda);
 
         return new RebalancearPorDesvioResponse(clientesRebalanceados, _settings.LimiarDesvioPontos);
     }
 
     private async Task<(List<IrDedoDuroEvent> EventosDedoDuro, IrVendaEvent? EventoVenda)?> RebalancearCliente(
         Cliente cliente, ContaGrafica contaGrafica,
+        List<Custodia> custodiasCliente,
         Dictionary<string, decimal> percentuaisAlvo, CancellationToken cancellationToken)
     {
-        var custodias = (await custodiaRepository.FindByContaGraficaId(contaGrafica.Id, cancellationToken))
-            .Where(c => c.Quantidade > 0)
-            .ToList();
+        var custodias = custodiasCliente.Where(c => c.Quantidade > 0).ToList();
 
         if (custodias.Count == 0)
             return null;

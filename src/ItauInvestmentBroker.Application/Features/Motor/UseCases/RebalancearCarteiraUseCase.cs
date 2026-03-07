@@ -10,6 +10,7 @@ using ItauInvestmentBroker.Domain.Cestas.Repositories;
 using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
 using ItauInvestmentBroker.Domain.Motor.Repositories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ItauInvestmentBroker.Application.Features.Motor.UseCases;
@@ -23,117 +24,173 @@ public class RebalancearCarteiraUseCase(
     KafkaEventPublisher kafkaEventPublisher,
     IDateTimeProvider dateTimeProvider,
     IUnitOfWork unitOfWork,
+    ILogger<RebalancearCarteiraUseCase> logger,
     IOptions<MotorSettings> motorSettings)
 {
     private readonly MotorSettings _settings = motorSettings.Value;
 
     public async Task Executar(Cesta cestaAntiga, Cesta cestaNova, CancellationToken cancellationToken = default)
     {
-        // RN-045/RN-046: Rebalanceamento por mudanca de cesta para clientes ativos.
-        var clientes = (await clienteRepository.FindAtivos(cancellationToken)).ToList();
-        if (clientes.Count == 0)
-            return;
-
         var tickersAntigos = cestaAntiga.Itens.Select(i => i.Ticker).ToHashSet();
         var tickersNovos = cestaNova.Itens.ToDictionary(i => i.Ticker, i => i.Percentual);
 
         var tickersQueSairam = tickersAntigos.Where(t => !tickersNovos.ContainsKey(t)).ToList();
         var tickersQueEntraram = tickersNovos.Keys.Where(t => !tickersAntigos.Contains(t)).ToList();
 
-        var eventosIrDedoDuro = new List<IrDedoDuroEvent>();
-        var eventosIrVenda = new List<IrVendaEvent>();
+        var totalClientes = await clienteRepository.CountAtivos(cancellationToken);
+        if (totalClientes == 0)
+            return;
 
-        foreach (var cliente in clientes)
+        var tamanhoLote = _settings.TamanhoLoteRebalanceamento;
+
+        for (var skip = 0; skip < totalClientes; skip += tamanhoLote)
         {
-            var contaGrafica = cliente.ContaGrafica;
-            if (contaGrafica is null)
-                continue;
+            var lote = await clienteRepository.FindAtivosPaginado(skip, tamanhoLote, cancellationToken);
+            if (lote.Count == 0)
+                break;
 
-            var vendasCliente = new List<VendaInfo>();
-            decimal valorObtidoVendas = 0;
-
-            // RN-047: Vender toda a posicao dos ativos que sairam da cesta.
-            foreach (var ticker in tickersQueSairam)
-            {
-                var resultado = await custodiaAppService.VenderPosicao(
-                    contaGrafica.Id, ticker, cotacaoService, cancellationToken);
-                if (resultado is null)
-                    continue;
-
-                vendasCliente.Add(resultado);
-                valorObtidoVendas += resultado.ValorVenda;
-            }
-
-            // RN-049: Rebalancear ativos que mudaram de percentual.
-            var custodias = (await custodiaRepository.FindByContaGraficaId(contaGrafica.Id, cancellationToken))
-                .Where(c => c.Quantidade > 0)
+            // Bulk load: carregar todas as custodiass do lote de uma vez
+            var contaGraficaIds = lote
+                .Where(c => c.ContaGrafica is not null)
+                .Select(c => c.ContaGrafica!.Id)
                 .ToList();
 
-            var valorTotalCarteira = custodias.Sum(c =>
+            var todosTickersRelevantes = tickersAntigos.Union(tickersNovos.Keys).ToList();
+            var todasCustodias = (await custodiaRepository.FindByContaGraficaIdsAndTickers(
+                contaGraficaIds, todosTickersRelevantes, cancellationToken)).ToList();
+
+            var custodiasPorConta = todasCustodias
+                .GroupBy(c => c.ContaGraficaId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var eventosIrDedoDuro = new List<IrDedoDuroEvent>();
+            var eventosIrVenda = new List<IrVendaEvent>();
+
+            foreach (var cliente in lote)
             {
-                var cot = cotacaoService.ObterCotacao(c.Ticker);
-                return c.Quantidade * (cot?.PrecoFechamento ?? 0);
-            }) + valorObtidoVendas;
-
-            var tickersComDeficit = new List<(string Ticker, decimal Deficit, decimal Preco)>();
-
-            foreach (var itemNovo in cestaNova.Itens)
-            {
-                if (tickersQueEntraram.Contains(itemNovo.Ticker))
-                    continue;
-
-                var custodia = custodias.FirstOrDefault(c => c.Ticker == itemNovo.Ticker);
-                if (custodia is null || custodia.Quantidade == 0)
-                    continue;
-
-                var cotacao = cotacaoService.ObterCotacao(itemNovo.Ticker);
-                if (cotacao is null)
-                    continue;
-
-                var valorAtual = custodia.Quantidade * cotacao.PrecoFechamento;
-                var valorAlvo = valorTotalCarteira * (itemNovo.Percentual / TradingConstants.PercentualBase);
-                var diferenca = valorAtual - valorAlvo;
-
-                if (diferenca > cotacao.PrecoFechamento)
+                try
                 {
-                    var quantidadeVender = (int)(diferenca / cotacao.PrecoFechamento);
-                    var valorVenda = quantidadeVender * cotacao.PrecoFechamento;
-                    var lucro = quantidadeVender * (cotacao.PrecoFechamento - custodia.PrecoMedio);
+                    var contaGrafica = cliente.ContaGrafica;
+                    if (contaGrafica is null)
+                        continue;
 
-                    vendasCliente.Add(new VendaInfo(itemNovo.Ticker, quantidadeVender, cotacao.PrecoFechamento, custodia.PrecoMedio, lucro, valorVenda));
-                    valorObtidoVendas += valorVenda;
+                    custodiasPorConta.TryGetValue(contaGrafica.Id, out var custodiasCliente);
+                    custodiasCliente ??= [];
 
-                    // RN-043: Venda nao altera PM
-                    custodia.Quantidade -= quantidadeVender;
-                    custodia.DataUltimaAtualizacao = dateTimeProvider.UtcNow;
+                    var (dedoDuro, venda) = await ProcessarCliente(
+                        cliente, contaGrafica, custodiasCliente,
+                        tickersQueSairam, tickersQueEntraram, tickersNovos, cancellationToken);
+
+                    eventosIrDedoDuro.AddRange(dedoDuro);
+                    if (venda is not null)
+                        eventosIrVenda.Add(venda);
                 }
-                else if (diferenca < -cotacao.PrecoFechamento)
+                catch (Exception ex)
                 {
-                    tickersComDeficit.Add((itemNovo.Ticker, Math.Abs(diferenca), cotacao.PrecoFechamento));
+                    logger.LogError(ex,
+                        "Erro ao rebalancear carteira do cliente {ClienteId}. Continuando com os demais",
+                        cliente.Id);
                 }
             }
 
-            // RN-048: Com o valor obtido nas vendas, comprar novos ativos e ativos com deficit.
-            if (valorObtidoVendas > 0)
-            {
-                var comprasRealizadas = await ComprarAtivosProporcionalmente(
-                    contaGrafica.Id, cliente, tickersQueEntraram, tickersNovos,
-                    tickersComDeficit, valorObtidoVendas, valorTotalCarteira, cancellationToken);
-                eventosIrDedoDuro.AddRange(comprasRealizadas);
-            }
+            await unitOfWork.CommitAsync(cancellationToken);
+            await kafkaEventPublisher.PublicarEventosIr(eventosIrDedoDuro, eventosIrVenda);
+        }
+    }
 
-            // RN-057: Persistir vendas e calcular IR.
-            irCalculationService.PersistirVendas(cliente.Id, vendasCliente);
+    private async Task<(List<IrDedoDuroEvent> EventosDedoDuro, IrVendaEvent? EventoVenda)> ProcessarCliente(
+        Cliente cliente, ContaGrafica contaGrafica, List<Custodia> custodiasCliente,
+        List<string> tickersQueSairam, List<string> tickersQueEntraram,
+        Dictionary<string, decimal> tickersNovos, CancellationToken cancellationToken)
+    {
+        var vendasCliente = new List<VendaInfo>();
+        decimal valorObtidoVendas = 0;
 
-            var eventoIrVenda = await irCalculationService.CalcularIrVenda(cliente, vendasCliente, cancellationToken);
-            if (eventoIrVenda is not null)
-                eventosIrVenda.Add(eventoIrVenda);
+        // RN-047: Vender toda a posicao dos ativos que sairam da cesta.
+        foreach (var ticker in tickersQueSairam)
+        {
+            var custodia = custodiasCliente.FirstOrDefault(c => c.Ticker == ticker);
+            if (custodia is null || custodia.Quantidade == 0)
+                continue;
+
+            var cotacao = cotacaoService.ObterCotacao(ticker);
+            if (cotacao is null)
+                continue;
+
+            var valorVenda = custodia.Quantidade * cotacao.PrecoFechamento;
+            var lucro = custodia.Quantidade * (cotacao.PrecoFechamento - custodia.PrecoMedio);
+
+            vendasCliente.Add(new VendaInfo(ticker, custodia.Quantidade, cotacao.PrecoFechamento, custodia.PrecoMedio, lucro, valorVenda));
+            valorObtidoVendas += valorVenda;
+
+            // RN-043: Venda nao altera PM, apenas zera quantidade.
+            custodia.Quantidade = 0;
+            custodia.DataUltimaAtualizacao = dateTimeProvider.UtcNow;
         }
 
-        // RN-055/RN-062: Persistir antes da publicacao de eventos fiscais.
-        await unitOfWork.CommitAsync(cancellationToken);
+        // RN-049: Rebalancear ativos que mudaram de percentual.
+        var custodiasComQuantidade = custodiasCliente.Where(c => c.Quantidade > 0).ToList();
 
-        await kafkaEventPublisher.PublicarEventosIr(eventosIrDedoDuro, eventosIrVenda);
+        var valorTotalCarteira = custodiasComQuantidade.Sum(c =>
+        {
+            var cot = cotacaoService.ObterCotacao(c.Ticker);
+            return c.Quantidade * (cot?.PrecoFechamento ?? 0);
+        }) + valorObtidoVendas;
+
+        var tickersComDeficit = new List<(string Ticker, decimal Deficit, decimal Preco)>();
+
+        foreach (var itemNovo in tickersNovos)
+        {
+            if (tickersQueEntraram.Contains(itemNovo.Key))
+                continue;
+
+            var custodia = custodiasComQuantidade.FirstOrDefault(c => c.Ticker == itemNovo.Key);
+            if (custodia is null || custodia.Quantidade == 0)
+                continue;
+
+            var cotacao = cotacaoService.ObterCotacao(itemNovo.Key);
+            if (cotacao is null)
+                continue;
+
+            var valorAtual = custodia.Quantidade * cotacao.PrecoFechamento;
+            var valorAlvo = valorTotalCarteira * (itemNovo.Value / TradingConstants.PercentualBase);
+            var diferenca = valorAtual - valorAlvo;
+
+            if (diferenca > cotacao.PrecoFechamento)
+            {
+                var quantidadeVender = (int)(diferenca / cotacao.PrecoFechamento);
+                var valorVenda = quantidadeVender * cotacao.PrecoFechamento;
+                var lucro = quantidadeVender * (cotacao.PrecoFechamento - custodia.PrecoMedio);
+
+                vendasCliente.Add(new VendaInfo(itemNovo.Key, quantidadeVender, cotacao.PrecoFechamento, custodia.PrecoMedio, lucro, valorVenda));
+                valorObtidoVendas += valorVenda;
+
+                // RN-043: Venda nao altera PM
+                custodia.Quantidade -= quantidadeVender;
+                custodia.DataUltimaAtualizacao = dateTimeProvider.UtcNow;
+            }
+            else if (diferenca < -cotacao.PrecoFechamento)
+            {
+                tickersComDeficit.Add((itemNovo.Key, Math.Abs(diferenca), cotacao.PrecoFechamento));
+            }
+        }
+
+        // RN-048: Com o valor obtido nas vendas, comprar novos ativos e ativos com deficit.
+        var eventosIrDedoDuro = new List<IrDedoDuroEvent>();
+        if (valorObtidoVendas > 0)
+        {
+            var comprasRealizadas = await ComprarAtivosProporcionalmente(
+                contaGrafica.Id, cliente, tickersQueEntraram, tickersNovos,
+                tickersComDeficit, valorObtidoVendas, valorTotalCarteira, cancellationToken);
+            eventosIrDedoDuro.AddRange(comprasRealizadas);
+        }
+
+        // RN-057: Persistir vendas e calcular IR.
+        irCalculationService.PersistirVendas(cliente.Id, vendasCliente);
+
+        var eventoIrVenda = await irCalculationService.CalcularIrVenda(cliente, vendasCliente, cancellationToken);
+
+        return (eventosIrDedoDuro, eventoIrVenda);
     }
 
     private async Task<List<IrDedoDuroEvent>> ComprarAtivosProporcionalmente(

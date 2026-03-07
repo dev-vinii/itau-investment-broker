@@ -47,13 +47,22 @@ public class RebalancearPorDesvioUseCaseTests
         _useCase = new RebalancearPorDesvioUseCase(
             _cestaRepository, _clienteRepository, _custodiaRepository,
             _cotacaoService, _custodiaAppService, _irCalculationService,
-            _kafkaEventPublisher, _dateTimeProvider, _unitOfWork, _motorSettingsOptions);
+            _kafkaEventPublisher, _dateTimeProvider, _unitOfWork,
+            Substitute.For<ILogger<RebalancearPorDesvioUseCase>>(),
+            _motorSettingsOptions);
     }
 
     private void SetupCestaAtiva()
     {
         var cesta = CestaFaker.CriarComTickers("PETR4", "VALE3");
         _cestaRepository.FindAtiva(Arg.Any<CancellationToken>()).Returns(cesta);
+    }
+
+    private void SetupClientes(params Cliente[] clientes)
+    {
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(clientes.Length);
+        _clienteRepository.FindAtivosPaginado(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(clientes.ToList());
     }
 
     [Fact]
@@ -70,8 +79,7 @@ public class RebalancearPorDesvioUseCaseTests
     public async Task Deve_Lancar_BusinessException_Quando_Sem_Clientes_Ativos()
     {
         SetupCestaAtiva();
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<Cliente>());
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(0);
 
         var act = () => _useCase.Executar();
 
@@ -83,8 +91,7 @@ public class RebalancearPorDesvioUseCaseTests
     {
         SetupCestaAtiva();
         var cliente = ClienteFaker.CriarComConta().Generate();
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
 
         // Carteira equilibrada: 50%/50% alvo, precos iguais
         var custodias = new List<Custodia>
@@ -92,7 +99,8 @@ public class RebalancearPorDesvioUseCaseTests
             new() { Ticker = "PETR4", Quantidade = 100, PrecoMedio = 10m, ContaGraficaId = cliente.ContaGrafica!.Id },
             new() { Ticker = "VALE3", Quantidade = 100, PrecoMedio = 10m, ContaGraficaId = cliente.ContaGrafica.Id }
         };
-        _custodiaRepository.FindByContaGraficaId(cliente.ContaGrafica.Id, Arg.Any<CancellationToken>())
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
             .Returns(custodias.AsEnumerable());
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
         _cotacaoService.ObterCotacao("VALE3").Returns(CotacaoFaker.Criar("VALE3", 10m));
@@ -108,19 +116,23 @@ public class RebalancearPorDesvioUseCaseTests
     {
         SetupCestaAtiva();
         var cliente = ClienteFaker.CriarComConta().Generate();
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
 
         // PETR4 tem 80% quando alvo e 50% (desvio = 30 p.p. > 5 p.p.)
         var custodiaPetr = new Custodia { Ticker = "PETR4", Quantidade = 80, PrecoMedio = 10m, ContaGraficaId = cliente.ContaGrafica!.Id };
         var custodiaVale = new Custodia { Ticker = "VALE3", Quantidade = 20, PrecoMedio = 10m, ContaGraficaId = cliente.ContaGrafica.Id };
-        _custodiaRepository.FindByContaGraficaId(cliente.ContaGrafica.Id, Arg.Any<CancellationToken>())
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
             .Returns(new List<Custodia> { custodiaPetr, custodiaVale }.AsEnumerable());
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
         _cotacaoService.ObterCotacao("VALE3").Returns(CotacaoFaker.Criar("VALE3", 10m));
 
         _vendaRepository.SomarVendasMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
         _vendaRepository.SomarLucroMes(Arg.Any<long>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(0m);
+
+        _custodiaRepository.FindByContaGraficaIdAndTicker(
+            cliente.ContaGrafica.Id, "VALE3", Arg.Any<CancellationToken>())
+            .Returns(custodiaVale);
 
         var result = await _useCase.Executar();
 
@@ -135,9 +147,9 @@ public class RebalancearPorDesvioUseCaseTests
     {
         SetupCestaAtiva();
         var cliente = ClienteFaker.CriarComConta().Generate();
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
-        _custodiaRepository.FindByContaGraficaId(cliente.ContaGrafica!.Id, Arg.Any<CancellationToken>())
+        SetupClientes(cliente);
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
             .Returns(Enumerable.Empty<Custodia>());
 
         var result = await _useCase.Executar();
@@ -150,8 +162,10 @@ public class RebalancearPorDesvioUseCaseTests
     {
         SetupCestaAtiva();
         var cliente = ClienteFaker.Criar().Generate(); // sem conta
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(new List<Cliente> { cliente }.AsEnumerable());
+        SetupClientes(cliente);
+        _custodiaRepository.FindByContaGraficaIdsAndTickers(
+            Arg.Any<IEnumerable<long>>(), Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Empty<Custodia>());
 
         var result = await _useCase.Executar();
 

@@ -4,10 +4,7 @@ using ItauInvestmentBroker.Application.Common.Constants;
 using ItauInvestmentBroker.Application.Common.Exceptions;
 using ItauInvestmentBroker.Application.Common.Interfaces;
 using ItauInvestmentBroker.Application.Services;
-using ItauInvestmentBroker.Application.Features.Clientes.UseCases;
-using ItauInvestmentBroker.Application.Features.Cestas.UseCases;
 using ItauInvestmentBroker.Application.Features.Motor.UseCases;
-using ItauInvestmentBroker.Application.Features.Rentabilidade.UseCases;
 using ItauInvestmentBroker.Domain.Cestas.Entities;
 using ItauInvestmentBroker.Domain.Clientes.Entities;
 using ItauInvestmentBroker.Domain.Motor.Entities;
@@ -81,7 +78,11 @@ public class ExecutarCompraUseCaseTests
     private List<Cliente> SetupClientes(int quantidade = 1)
     {
         var clientes = ClienteFaker.CriarComConta().Generate(quantidade);
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>()).Returns(clientes.AsEnumerable());
+        var somaValorMensal = clientes.Sum(c => c.ValorMensal);
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(clientes.Count);
+        _clienteRepository.SomarValorMensalAtivos(Arg.Any<CancellationToken>()).Returns(somaValorMensal);
+        _clienteRepository.FindAtivosPaginado(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(clientes);
         return clientes;
     }
 
@@ -99,8 +100,7 @@ public class ExecutarCompraUseCaseTests
     public async Task Deve_Lancar_BusinessException_Quando_Sem_Clientes_Ativos()
     {
         SetupCestaAtiva(("PETR4", 50), ("VALE3", 50));
-        _clienteRepository.FindAtivos(Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Empty<Cliente>());
+        _clienteRepository.CountAtivos(Arg.Any<CancellationToken>()).Returns(0);
 
         var act = () => _useCase.Executar();
 
@@ -129,8 +129,6 @@ public class ExecutarCompraUseCaseTests
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 30m));
         _cotacaoService.ObterCotacao("VALE3").Returns(default(ItauInvestmentBroker.Application.Common.Models.Cotacao));
 
-        // PETR4 works but VALE3 will fail - however order depends on Itens iteration
-        // Since PETR4 has cotacao, it won't fail on PETR4. VALE3 has null cotacao.
         var act = () => _useCase.Executar();
 
         var ex = await act.Should().ThrowAsync<BusinessException>();
@@ -164,6 +162,7 @@ public class ExecutarCompraUseCaseTests
         SetupCestaAtiva(("PETR4", 100));
         var clientes = SetupClientes();
         clientes[0].ValorMensal = 300m;
+        _clienteRepository.SomarValorMensalAtivos(Arg.Any<CancellationToken>()).Returns(300m);
         var contaMaster = SetupContaMaster();
 
         // aporte=100, ticker 100% => R$100 / R$0.50 = 200 unidades = 200 lote + 0 frac
@@ -235,6 +234,7 @@ public class ExecutarCompraUseCaseTests
         SetupCestaAtiva(("PETR4", 100));
         var clientes = SetupClientes();
         clientes[0].ValorMensal = 300m;
+        _clienteRepository.SomarValorMensalAtivos(Arg.Any<CancellationToken>()).Returns(300m);
         var contaMaster = SetupContaMaster();
 
         _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));

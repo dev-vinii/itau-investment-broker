@@ -1,15 +1,13 @@
 using FluentValidation;
-using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
+using ItauInvestmentBroker.Application.Common.Configuration;
 using ItauInvestmentBroker.Application.Common.Interfaces;
-using ItauInvestmentBroker.Application.Features.Motor.UseCases;
+using ItauInvestmentBroker.Application.Features.Cestas.DTOs;
+using ItauInvestmentBroker.Application.Features.Motor.DTOs;
 using ItauInvestmentBroker.Domain.Cestas.Entities;
-using ItauInvestmentBroker.Domain.Clientes.Entities;
-using ItauInvestmentBroker.Domain.Motor.Entities;
 using ItauInvestmentBroker.Domain.Cestas.Repositories;
-using ItauInvestmentBroker.Domain.Clientes.Repositories;
 using ItauInvestmentBroker.Domain.Common;
-using ItauInvestmentBroker.Domain.Motor.Repositories;
 using Mapster;
+using Microsoft.Extensions.Options;
 
 namespace ItauInvestmentBroker.Application.Features.Cestas.UseCases;
 
@@ -18,8 +16,11 @@ public class CriarAtualizarCestaUseCase(
     IUnitOfWork unitOfWork,
     IValidator<CestaRequest> validator,
     IDateTimeProvider dateTimeProvider,
-    RebalancearCarteiraUseCase rebalancearCarteira)
+    IKafkaProducer kafkaProducer,
+    IOptions<MotorSettings> motorSettings)
 {
+    private readonly MotorSettings _settings = motorSettings.Value;
+
     public async Task<CestaResponse> Executar(CestaRequest request, CancellationToken cancellationToken = default)
     {
         // RN-014/RN-015: Cesta deve ter 5 ativos e somar 100%.
@@ -38,10 +39,18 @@ public class CriarAtualizarCestaUseCase(
 
         await unitOfWork.CommitAsync(cancellationToken);
 
-        // RN-019: Disparar rebalanceamento se havia cesta anterior
+        // RN-019: Disparar rebalanceamento assíncrono se havia cesta anterior
         if (cestaAntiga is not null)
         {
-            await rebalancearCarteira.Executar(cestaAntiga, novaCesta, cancellationToken);
+            var command = new RebalanceamentoCarteiraCommand(
+                cestaAntiga.Id,
+                novaCesta.Id,
+                dateTimeProvider.UtcNow);
+
+            await kafkaProducer.ProduceAsync(
+                _settings.TopicoRebalanceamentoCarteira,
+                novaCesta.Id.ToString(),
+                command);
         }
 
         return novaCesta.Adapt<CestaResponse>();

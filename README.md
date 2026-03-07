@@ -91,6 +91,15 @@ Base path: `/api`
 - `POST /api/motor/executar-compra`
 - `POST /api/motor/rebalancear-desvio`
 
+### Flag de escalabilidade
+
+`[SCALABILITY_FLAG_ASYNC_ENDPOINTS]`: em cenário de crescimento de volume/concorrência, endpoints com processamento pesado e maior risco de timeout devem migrar para modelo assíncrono (fila + worker + polling/webhook de status), por exemplo:
+- `POST /api/motor/executar-compra`
+- `POST /api/motor/rebalancear-desvio`
+- `GET /api/clientes/{id}/rentabilidade` (quando envolver cálculo consolidado custoso)
+
+Objetivo: evitar timeouts HTTP, reduzir acoplamento de latência ao request/response e melhorar estabilidade sob carga.
+
 ## Infra local
 
 `docker-compose.local.yml` sobe:
