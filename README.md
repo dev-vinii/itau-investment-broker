@@ -40,6 +40,32 @@ A organização `DDD + feature-based` foi adotada para:
 
 Importante: no estado atual, o sistema continua sendo um monólito modular.
 
+### Diagrama de arquitetura
+
+```mermaid
+flowchart LR
+    U[Usuario] --> FE[Frontend React]
+    FE --> API[ItauInvestmentBroker.API<br/>Controllers + Middleware + CORS]
+
+    API --> APP[Application Layer<br/>UseCases por Feature]
+    APP --> DOM[Domain Layer<br/>Entities + Repositories Interfaces + Regras]
+    APP --> INF[Infrastructure Layer<br/>Repos EF + Kafka + Services]
+
+    INF --> DB[(MySQL)]
+    INF --> KAFKA[(Kafka Broker)]
+    INF --> B3[COTAHIST/B3 Files]
+
+    SCH[Scheduler Script/Job] --> API
+    API --> CC[Kafka Control Center]
+
+    subgraph Monolito Modular .NET
+      API
+      APP
+      DOM
+      INF
+    end
+```
+
 ### Fluxo principal do motor
 
 1. Scheduler dispara `POST /api/motor/executar-compra` nos ciclos 5/15/25 (ajustando para dia útil).
