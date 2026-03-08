@@ -38,24 +38,6 @@ public class KafkaEventPublisher(
         }
     }
 
-    public async Task<bool> PublicarOrdemCompraExecutada(OrdemCompraExecutadaEvent evento)
-    {
-        return await PublishWithRetry(
-            _settings.TopicoOrdemCompraExecutada,
-            evento.OrdemCompraId.ToString(),
-            evento,
-            $"ordem de compra executada {evento.OrdemCompraId}");
-    }
-
-    public async Task<bool> PublicarMotorExecucaoFalhou(MotorExecucaoFalhouEvent evento)
-    {
-        return await PublishWithRetry(
-            _settings.TopicoMotorExecucaoFalhou,
-            $"{evento.Operacao}-{evento.DataOcorrencia:yyyyMMddHHmmssfff}",
-            evento,
-            $"falha de execucao do motor ({evento.Operacao})");
-    }
-
     private async Task<bool> PublishWithRetry<T>(string topic, string key, T message, string context)
     {
         var attempt = 1;

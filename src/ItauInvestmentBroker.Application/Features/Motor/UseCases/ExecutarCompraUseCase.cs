@@ -33,7 +33,6 @@ public class ExecutarCompraUseCase(
     IUnitOfWork unitOfWork,
     IOptions<MotorSettings> motorSettings)
 {
-    private const string OperacaoExecutarCompra = "EXECUTAR_COMPRA";
     private readonly MotorSettings _settings = motorSettings.Value;
 
     public async Task<ExecutarCompraResponse> Executar(CancellationToken cancellationToken = default)
@@ -103,19 +102,6 @@ public class ExecutarCompraUseCase(
 
             await unitOfWork.CommitTransactionAsync(cancellationToken);
 
-            var ordemCompraExecutadaPublicada = await kafkaEventPublisher.PublicarOrdemCompraExecutada(
-                new OrdemCompraExecutadaEvent(
-                    KafkaEventTypes.OrdemCompraExecutada,
-                    ordem.Id,
-                    cesta.Id,
-                    contaMaster.Id,
-                    totalClientes,
-                    ordem.ValorTotal,
-                    ordem.DataExecucao));
-            if (!ordemCompraExecutadaPublicada)
-                logger.LogError("Evento critico nao publicado: {Tipo} para ordem {OrdemCompraId}",
-                    KafkaEventTypes.OrdemCompraExecutada, ordem.Id);
-
             // RN-055: Publicar eventos de IR apos persistencia.
             await kafkaEventPublisher.PublicarEventosIr(eventosIrTodos, []);
 
@@ -148,39 +134,11 @@ public class ExecutarCompraUseCase(
                 eventosIrTodos.Count,
                 $"Compra programada executada com sucesso para {totalClientes} clientes.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             await unitOfWork.RollbackTransactionAsync(cancellationToken);
-
-            try
-            {
-                var motorExecucaoFalhouPublicado = await kafkaEventPublisher.PublicarMotorExecucaoFalhou(
-                    new MotorExecucaoFalhouEvent(
-                        KafkaEventTypes.MotorExecucaoFalhou,
-                        OperacaoExecutarCompra,
-                        ex.Message,
-                        ObterCodigoErro(ex),
-                        dateTimeProvider.UtcNow));
-                if (!motorExecucaoFalhouPublicado)
-                    logger.LogError("Evento critico nao publicado: {Tipo} para operacao {Operacao}",
-                        KafkaEventTypes.MotorExecucaoFalhou, OperacaoExecutarCompra);
-            }
-            catch
-            {
-                // O erro original da execução do motor deve prevalecer.
-            }
-
             throw;
         }
-    }
-
-    private static string? ObterCodigoErro(Exception ex)
-    {
-        return ex switch
-        {
-            BusinessException businessException => businessException.Codigo,
-            _ => null
-        };
     }
 
     private async Task<Dictionary<(long ContaGraficaId, string Ticker), Custodia>> CarregarCustodiasMaster(

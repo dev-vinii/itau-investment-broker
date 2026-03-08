@@ -196,39 +196,6 @@ public class ExecutarCompraUseCaseTests
     }
 
     [Fact]
-    public async Task Deve_Publicar_Evento_Ordem_Compra_Executada_No_Kafka()
-    {
-        SetupCestaAtiva(("PETR4", 50), ("VALE3", 50));
-        SetupClientes();
-        SetupContaMaster();
-
-        _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
-        _cotacaoService.ObterCotacao("VALE3").Returns(CotacaoFaker.Criar("VALE3", 10m));
-
-        await _useCase.Executar();
-
-        await _kafkaProducer.Received().ProduceAsync(
-            KafkaTopicNames.OrdemCompraExecutada, Arg.Any<string>(), Arg.Any<object>());
-    }
-
-    [Fact]
-    public async Task Deve_Publicar_Evento_Motor_Execucao_Falhou_No_Kafka_Quando_Erro_No_Fluxo()
-    {
-        SetupCestaAtiva(("PETR4", 100));
-        SetupClientes();
-        SetupContaMaster();
-        _cotacaoService.ObterCotacao("PETR4").Returns(CotacaoFaker.Criar("PETR4", 10m));
-        _distribuicaoRepository.When(x => x.Add(Arg.Any<Distribuicao>())).Do(_ => throw new InvalidOperationException("Falha simulada"));
-
-        var act = () => _useCase.Executar();
-
-        await act.Should().ThrowAsync<InvalidOperationException>();
-
-        await _kafkaProducer.Received().ProduceAsync(
-            KafkaTopicNames.MotorExecucaoFalhou, Arg.Any<string>(), Arg.Any<object>());
-    }
-
-    [Fact]
     public async Task Deve_Descontar_Saldo_Master_Da_Quantidade_A_Comprar()
     {
         SetupCestaAtiva(("PETR4", 100));

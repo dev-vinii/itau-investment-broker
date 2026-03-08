@@ -16,8 +16,6 @@ public class KafkaTopicInitializer(
     [
         KafkaTopicNames.IrDedoDuro,
         KafkaTopicNames.IrVenda,
-        KafkaTopicNames.OrdemCompraExecutada,
-        KafkaTopicNames.MotorExecucaoFalhou,
         KafkaTopicNames.RebalanceamentoCarteira
     ];
 

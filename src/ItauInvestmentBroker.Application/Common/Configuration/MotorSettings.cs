@@ -15,7 +15,5 @@ public class MotorSettings
     public int TamanhoLoteRebalanceamento { get; set; } = 100;
     public string TopicoIrDedoDuro { get; set; } = KafkaTopicNames.IrDedoDuro;
     public string TopicoIrVenda { get; set; } = KafkaTopicNames.IrVenda;
-    public string TopicoOrdemCompraExecutada { get; set; } = KafkaTopicNames.OrdemCompraExecutada;
-    public string TopicoMotorExecucaoFalhou { get; set; } = KafkaTopicNames.MotorExecucaoFalhou;
     public string TopicoRebalanceamentoCarteira { get; set; } = KafkaTopicNames.RebalanceamentoCarteira;
 }
