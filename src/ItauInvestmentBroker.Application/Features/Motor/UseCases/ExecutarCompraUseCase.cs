@@ -71,6 +71,7 @@ public class ExecutarCompraUseCase(
 
             // RN-034: Distribuicao para filhotes proporcional ao aporte, em lotes.
             var eventosIrTodos = new List<IrDedoDuroEvent>();
+            var distribuicoesResponse = new List<DistribuicaoClienteResponse>();
             var tamanhoLote = _settings.TamanhoLoteRebalanceamento;
 
             for (var skip = 0; skip < totalClientes; skip += tamanhoLote)
@@ -89,11 +90,12 @@ public class ExecutarCompraUseCase(
                         contaIdsLote, tickersCompra, cancellationToken))
                     .ToDictionary(c => (c.ContaGraficaId, TickerUtils.Normalize(c.Ticker)), c => c);
 
-                var (distribuicao, eventosIr) = DistribuirParaClientes(
+                var (distribuicao, eventosIr, distClientes) = DistribuirParaClientes(
                     ordem, itensCompra, loteClientes, contaMaster, valorTotalInvestimento,
                     somaValorMensal, custodiasLote);
                 distribuicaoRepository.Add(distribuicao);
                 eventosIrTodos.AddRange(eventosIr);
+                distribuicoesResponse.AddRange(distClientes);
             }
 
             // RN-039: Residuo não distribuido permanece em custódia master.
@@ -117,13 +119,34 @@ public class ExecutarCompraUseCase(
             // RN-055: Publicar eventos de IR apos persistencia.
             await kafkaEventPublisher.PublicarEventosIr(eventosIrTodos, []);
 
+            var ordensCompraResponse = itensCompra.Select(i =>
+            {
+                var detalhes = new List<DetalheOrdemResponse>();
+                if (i.QuantidadeLote > 0)
+                    detalhes.Add(new DetalheOrdemResponse("LOTE", i.Ticker, i.QuantidadeLote));
+                if (i.QuantidadeFracionario > 0)
+                    detalhes.Add(new DetalheOrdemResponse("FRACIONARIO",
+                        i.Ticker + TradingConstants.SufixoTickerFracionario, i.QuantidadeFracionario));
+
+                return new OrdemCompraResponse(
+                    i.Ticker, i.QuantidadeAComprar, detalhes,
+                    i.PrecoUnitario, i.QuantidadeAComprar * i.PrecoUnitario);
+            }).ToList();
+
+            var residuosResponse = itensCompra
+                .Where(i => i.QuantidadeTotalDisponivel - i.QuantidadeDistribuida > 0)
+                .Select(i => new ResiduoMasterResponse(i.Ticker, i.QuantidadeTotalDisponivel - i.QuantidadeDistribuida))
+                .ToList();
+
             return new ExecutarCompraResponse(
-                ordem.Id, ordem.DataExecucao, ordem.ValorTotal, totalClientes,
-                itensCompra.Select(i => new ItemCompraResponse(
-                    i.Ticker, i.QuantidadeLote, i.QuantidadeFracionario,
-                    i.QuantidadeAComprar, i.PrecoUnitario,
-                    i.QuantidadeAComprar * i.PrecoUnitario
-                )).ToList());
+                ordem.DataExecucao,
+                totalClientes,
+                valorTotalInvestimento,
+                ordensCompraResponse,
+                distribuicoesResponse,
+                residuosResponse,
+                eventosIrTodos.Count,
+                $"Compra programada executada com sucesso para {totalClientes} clientes.");
         }
         catch (Exception ex)
         {
@@ -280,7 +303,7 @@ public class ExecutarCompraUseCase(
                     custodiaMaster.Quantidade = 0;
     }
 
-    private (Distribuicao, List<IrDedoDuroEvent>) DistribuirParaClientes(
+    private (Distribuicao, List<IrDedoDuroEvent>, List<DistribuicaoClienteResponse>) DistribuirParaClientes(
         OrdemCompra ordem, List<ItemCompraInfo> itensCompra, List<Cliente> clientes,
         ContaGrafica contaMaster, decimal valorTotalInvestimento, decimal somaValorMensal,
         Dictionary<(long ContaGraficaId, string Ticker), Custodia> custodiasCache)
@@ -292,6 +315,7 @@ public class ExecutarCompraUseCase(
         };
 
         var eventosIr = new List<IrDedoDuroEvent>();
+        var ativosPorCliente = new Dictionary<long, List<AtivoDistribuidoResponse>>();
 
         foreach (var item in itensCompra)
         foreach (var cliente in clientes)
@@ -313,6 +337,10 @@ public class ExecutarCompraUseCase(
                 ContaGraficaId = cliente.ContaGrafica!.Id
             });
 
+            if (!ativosPorCliente.ContainsKey(cliente.Id))
+                ativosPorCliente[cliente.Id] = [];
+            ativosPorCliente[cliente.Id].Add(new AtivoDistribuidoResponse(item.Ticker, quantidadeCliente));
+
             // RN-038/RN-041/RN-044: Atualizar custodia e recalcular preco medio.
             AtualizarCustodiaComCache(
                 cliente.ContaGrafica.Id, item.Ticker, quantidadeCliente,
@@ -324,7 +352,15 @@ public class ExecutarCompraUseCase(
                 quantidadeCliente, item.PrecoUnitario, ordem.DataExecucao));
         }
 
-        return (distribuicao, eventosIr);
+        var distribuicoesCliente = clientes
+            .Where(c => ativosPorCliente.ContainsKey(c.Id))
+            .Select(c => new DistribuicaoClienteResponse(
+                c.Id, c.Nome,
+                c.ValorMensal / _settings.DivisorMensal,
+                ativosPorCliente[c.Id]))
+            .ToList();
+
+        return (distribuicao, eventosIr, distribuicoesCliente);
     }
 
     private void AdicionarResiduoMaster(

@@ -91,14 +91,14 @@ Base path: `/api`
 - `POST /api/motor/executar-compra`
 - `POST /api/motor/rebalancear-desvio`
 
-### Flag de escalabilidade
+### Escalabilidade
 
-`[SCALABILITY_FLAG_ASYNC_ENDPOINTS]`: em cenário de crescimento de volume/concorrência, endpoints com processamento pesado e maior risco de timeout devem migrar para modelo assíncrono (fila + worker + polling/webhook de status), por exemplo:
-- `POST /api/motor/executar-compra`
-- `POST /api/motor/rebalancear-desvio`
-- `GET /api/clientes/{id}/rentabilidade` (quando envolver cálculo consolidado custoso)
+A aplicacao foi projetada para escalar horizontalmente:
 
-Objetivo: evitar timeouts HTTP, reduzir acoplamento de latência ao request/response e melhorar estabilidade sob carga.
+- **API stateless**: permite rodar multiplas instancias atras de um load balancer
+- **Kafka com 2 particoes por topico**: permite consumo paralelo entre instancias
+- **Rebalanceamento via Kafka**: a troca de cesta dispara evento assincrono, desacoplando o processamento pesado do request HTTP
+- **Processamento em lotes**: operacoes de rebalanceamento e compra usam paginacao para evitar sobrecarga de memoria
 
 ## Infra local
 
@@ -226,17 +226,17 @@ Padrao adotado:
 `:emoji: tipo: descricao curta no imperativo`
 
 Exemplos:
-- `:sparkles: feat: adiciona endpoint de rebalanceamento`
-- `:bug: fix: corrige validacao de cpf duplicado`
-- `:recycle: refactor: separa use case por responsabilidade`
-- `:memo: docs: atualiza matriz de regras de negocio`
-- `:wrench: chore: ajusta configuracao do scheduler`
+- `:sparkles: feat: add rebalancing endpoint`
+- `:bug: fix: fix duplicate cpf validation`
+- `:recycle: refactor: split use case by responsibility`
+- `:memo: docs: update business rules matrix`
+- `:wrench: chore: adjust scheduler configuration`
 
 Tipos mais usados:
 - `feat`, `fix`, `refactor`, `style`, `test`, `docs`, `chore`, `perf`, `ci`, `build`
 
 Regras:
-- usar mensagem em portugues;
+- mensagens de commit devem ser escritas em ingles;
 - manter descricao curta e direta;
 - preferir commits atomicos;
 - garantir build e testes aplicaveis antes de commitar.

@@ -172,9 +172,9 @@ public class ExecutarCompraUseCaseTests
 
         var result = await _useCase.Executar();
 
-        result.Itens.Should().HaveCount(1);
-        result.Itens[0].QuantidadeLote.Should().Be(200);
-        result.Itens[0].QuantidadeFracionario.Should().Be(0);
+        result.OrdensCompra.Should().HaveCount(1);
+        result.OrdensCompra[0].QuantidadeTotal.Should().Be(200);
+        result.OrdensCompra[0].Detalhes.Should().ContainSingle(d => d.Tipo == "LOTE" && d.Quantidade == 200);
     }
 
     [Fact]
@@ -250,6 +250,6 @@ public class ExecutarCompraUseCaseTests
         var result = await _useCase.Executar();
 
         // aporte=100, valor ticker=100, qtd necessaria=10, saldo master=5, qtd comprar=5
-        result.Itens[0].QuantidadeTotal.Should().Be(5);
+        result.OrdensCompra[0].QuantidadeTotal.Should().Be(5);
     }
 }

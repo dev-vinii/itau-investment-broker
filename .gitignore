@@ -12,5 +12,8 @@ obj/
 .DS_Store
 Thumbs.db
 
+## Cotacoes B3 (arquivos pesados, baixar direto da B3)
+cotacoes/
+
 ## Secrets
 appsettings.*.local.json

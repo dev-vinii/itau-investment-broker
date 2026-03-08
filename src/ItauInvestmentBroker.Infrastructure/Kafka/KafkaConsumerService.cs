@@ -18,11 +18,13 @@ public class KafkaConsumerService : BackgroundService
     public KafkaConsumerService(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
-        IEnumerable<IKafkaMessageHandler> handlers,
         ILogger<KafkaConsumerService> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+
+        using var scope = scopeFactory.CreateScope();
+        var handlers = scope.ServiceProvider.GetServices<IKafkaMessageHandler>();
         _topics = handlers.Select(h => h.Topic).Distinct().ToArray();
 
         var config = new ConsumerConfig

@@ -42,6 +42,7 @@ public static class DependencyInjection
 
         // Kafka
         services.AddSingleton<IKafkaProducer, KafkaProducer>();
+        services.AddHostedService<KafkaTopicInitializer>();
         services.AddHostedService<KafkaConsumerService>();
 
         // Health Checks
