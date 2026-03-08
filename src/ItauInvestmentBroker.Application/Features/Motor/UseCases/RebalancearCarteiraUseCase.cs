@@ -104,13 +104,15 @@ public class RebalancearCarteiraUseCase(
         Dictionary<string, decimal> tickersNovos, CancellationToken cancellationToken)
     {
         var vendasCliente = new List<VendaInfo>();
+        var custodiaPorTicker = custodiasCliente
+            .GroupBy(c => c.Ticker, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         decimal valorObtidoVendas = 0;
 
         // RN-047: Vender toda a posicao dos ativos que sairam da cesta.
         foreach (var ticker in tickersQueSairam)
         {
-            var custodia = custodiasCliente.FirstOrDefault(c => c.Ticker == ticker);
-            if (custodia is null || custodia.Quantidade == 0)
+            if (!custodiaPorTicker.TryGetValue(ticker, out var custodia) || custodia.Quantidade == 0)
                 continue;
 
             var cotacao = cotacaoService.ObterCotacao(ticker);
@@ -144,8 +146,7 @@ public class RebalancearCarteiraUseCase(
             if (tickersQueEntraram.Contains(itemNovo.Key))
                 continue;
 
-            var custodia = custodiasComQuantidade.FirstOrDefault(c => c.Ticker == itemNovo.Key);
-            if (custodia is null || custodia.Quantidade == 0)
+            if (!custodiaPorTicker.TryGetValue(itemNovo.Key, out var custodia) || custodia.Quantidade == 0)
                 continue;
 
             var cotacao = cotacaoService.ObterCotacao(itemNovo.Key);

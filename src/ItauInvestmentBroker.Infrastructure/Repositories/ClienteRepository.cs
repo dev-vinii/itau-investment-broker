@@ -22,6 +22,7 @@ public class ClienteRepository(AppDbContext context) : BaseRepository<Cliente>(c
     public async Task<IEnumerable<Cliente>> FindAtivos(CancellationToken cancellationToken = default)
     {
         return await DbSet
+            .AsNoTracking()
             .Include(c => c.ContaGrafica)
             .Where(c => c.Ativo)
             .ToListAsync(cancellationToken);
@@ -30,6 +31,7 @@ public class ClienteRepository(AppDbContext context) : BaseRepository<Cliente>(c
     public async Task<List<Cliente>> FindAtivosPaginado(int skip, int take, CancellationToken cancellationToken = default)
     {
         return await DbSet
+            .AsNoTracking()
             .Include(c => c.ContaGrafica)
             .Where(c => c.Ativo)
             .OrderBy(c => c.Id)
